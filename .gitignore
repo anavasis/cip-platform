@@ -1,0 +1,20 @@
+# Local, hosting and generated files
+.env
+.env.*
+*.log
+*.bak
+*.backup
+*.sql
+*.sqlite
+*.sqlite3
+*.pem
+*.key
+*.p12
+*.pfx
+*.zip
+.cagefs/
+.cl.selector/
+vendor/
+node_modules/
+.DS_Store
+Thumbs.db
