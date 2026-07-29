@@ -4,16 +4,19 @@ namespace StudyMentor\ContentEngine\Admin\Pages;
 
 use StudyMentor\ContentEngine\Core\FeatureFlags;
 use StudyMentor\ContentEngine\Core\Requirements;
+use StudyMentor\ContentEngine\Platform\PlatformDiagnostics;
 
 defined('ABSPATH') || exit;
 
 final class DiagnosticsPage
 {
     private $featureFlags;
+    private $platformDiagnostics;
 
-    public function __construct(FeatureFlags $featureFlags)
+    public function __construct(FeatureFlags $featureFlags, PlatformDiagnostics $platformDiagnostics)
     {
         $this->featureFlags = $featureFlags;
+        $this->platformDiagnostics = $platformDiagnostics;
     }
 
     public function render()
@@ -62,6 +65,7 @@ final class DiagnosticsPage
                 'Operational settings' => 'None',
                 'Client panel dependency' => 'None',
             ),
+            'platform' => $this->platformDiagnostics->collect(),
         );
 
         require SMCE_PLUGIN_DIR . 'views/admin/diagnostics.php';
