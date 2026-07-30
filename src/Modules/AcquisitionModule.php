@@ -118,7 +118,8 @@ final class AcquisitionModule implements ModuleInterface
                         $c->get(ParserRegistry::class),
                         $c->get(EvidenceRepositoryInterface::class),
                         $c->get(CapabilityRegistry::class),
-                        $c->get(VersionRegistry::class)
+                        $c->get(VersionRegistry::class),
+                        $c->get(FingerprintService::class)
                     );
                 }
             );

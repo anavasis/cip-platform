@@ -172,6 +172,7 @@ final class AcquisitionManager
 
         $evidence = new Evidence(array(
             'source' => $sourceKey,
+            'source_type' => $sourceType,
             'url' => isset($fetchResult['requested_url'])
                 ? (string) $fetchResult['requested_url']
                 : $url,
