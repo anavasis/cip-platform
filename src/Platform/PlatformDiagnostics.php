@@ -2,6 +2,7 @@
 
 namespace StudyMentor\ContentEngine\Platform;
 
+use StudyMentor\ContentEngine\Acquisition\AcquisitionDiagnostics;
 use StudyMentor\ContentEngine\Core\FeatureFlags;
 use StudyMentor\ContentEngine\Core\ModuleRegistry;
 use StudyMentor\ContentEngine\Registry\CapabilityRegistry;
@@ -15,17 +16,20 @@ final class PlatformDiagnostics
     private $capabilityRegistry;
     private $featureFlags;
     private $versionRegistry;
+    private $acquisitionDiagnostics;
 
     public function __construct(
         ModuleRegistry $moduleRegistry,
         CapabilityRegistry $capabilityRegistry,
         FeatureFlags $featureFlags,
-        VersionRegistry $versionRegistry
+        VersionRegistry $versionRegistry,
+        AcquisitionDiagnostics $acquisitionDiagnostics
     ) {
         $this->moduleRegistry = $moduleRegistry;
         $this->capabilityRegistry = $capabilityRegistry;
         $this->featureFlags = $featureFlags;
         $this->versionRegistry = $versionRegistry;
+        $this->acquisitionDiagnostics = $acquisitionDiagnostics;
     }
 
     /**
@@ -64,6 +68,7 @@ final class PlatformDiagnostics
             'module_ids' => $moduleIds,
             'capabilities' => $capabilities,
             'feature_flags' => $flags,
+            'acquisition_engine' => $this->acquisitionDiagnostics->status(),
             'confirmations' => array(
                 'acquisition' => $this->capabilityRegistry->isEnabled(CapabilityRegistry::ACQUISITION)
                     ? 'Active'

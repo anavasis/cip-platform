@@ -162,18 +162,18 @@ assertTrue(
 
 $versionRegistry = $container->get(VersionRegistry::class);
 assertSameValue(
-    'cip-003b-acquisition-engine-import',
+    'cip-003c-source-check-integration',
     $versionRegistry->get('platform_phase'),
-    'VersionRegistry platform phase must match CIP-003B label'
+    'VersionRegistry platform phase must match CIP-003C label'
 );
 
 $platformDiagnostics = $container->get(PlatformDiagnostics::class);
 $diagnostics = $platformDiagnostics->collect();
 
 assertSameValue(
-    'cip-003b-acquisition-engine-import',
+    'cip-003c-source-check-integration',
     $diagnostics['versions']['platform_phase'],
-    'PlatformDiagnostics phase label must match CIP-003B label'
+    'PlatformDiagnostics phase label must match CIP-003C label'
 );
 assertTrue(in_array('acquisition', $diagnostics['module_ids'], true), 'PlatformDiagnostics must include acquisition');
 assertTrue(
@@ -181,12 +181,10 @@ assertTrue(
     'PlatformDiagnostics acquisition confirmation must remain Inactive'
 );
 
-// --- SourceCheckService ownership and unchanged runtime wiring ---
+// --- SourceCheckService ownership via AcquisitionModule ---
 
 $sourceRepository = $container->get(SourceRepository::class);
-$safeFeedFetcher = $container->get(SafeFeedFetcher::class);
-$feedPreviewParser = $container->get(FeedPreviewParser::class);
-$asepHtmlParser = $container->get(AsepAnnouncementsHtmlParser::class);
+$acquisitionEngine = $container->get(AcquisitionEngine::class);
 $sourceCheckService = $container->get(SourceCheckService::class);
 
 assertInstance(SourceCheckService::class, $sourceCheckService, 'SourceCheckService must resolve from container');
@@ -196,19 +194,9 @@ assertSameValue(
     'SourceCheckService must share container SourceRepository'
 );
 assertSameValue(
-    spl_object_id($safeFeedFetcher),
-    spl_object_id(readPrivateProperty($sourceCheckService, 'feedFetcher')),
-    'SourceCheckService must share container SafeFeedFetcher'
-);
-assertSameValue(
-    spl_object_id($feedPreviewParser),
-    spl_object_id(readPrivateProperty($sourceCheckService, 'feedParser')),
-    'SourceCheckService must share container FeedPreviewParser'
-);
-assertSameValue(
-    spl_object_id($asepHtmlParser),
-    spl_object_id(readPrivateProperty($sourceCheckService, 'htmlParser')),
-    'SourceCheckService must share container AsepAnnouncementsHtmlParser'
+    spl_object_id($acquisitionEngine),
+    spl_object_id(readPrivateProperty($sourceCheckService, 'acquisitionEngine')),
+    'SourceCheckService must share container AcquisitionEngine'
 );
 
 if ($failures !== array()) {

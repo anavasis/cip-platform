@@ -34,3 +34,6 @@ jobs:
 
       - name: Run CIP-003B Acquisition Engine Smoke Test
         run: php tests/cip003b-acquisition-engine-smoke.php
+
+      - name: Run CIP-003C Source Check Integration Smoke Test
+        run: php tests/cip003c-source-check-integration-smoke.php
