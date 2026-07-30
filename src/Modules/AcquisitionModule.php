@@ -6,6 +6,7 @@ use StudyMentor\ContentEngine\Acquisition\AcquisitionDiagnostics;
 use StudyMentor\ContentEngine\Acquisition\AcquisitionEngine;
 use StudyMentor\ContentEngine\Acquisition\AcquisitionManager;
 use StudyMentor\ContentEngine\Acquisition\DownloadManager;
+use StudyMentor\ContentEngine\Acquisition\SourceAcquisitionService;
 use StudyMentor\ContentEngine\Admin\SourceCheckService;
 use StudyMentor\ContentEngine\Collectors\CollectorRegistry;
 use StudyMentor\ContentEngine\Collectors\SafeFeedCollector;
@@ -41,13 +42,24 @@ final class AcquisitionModule implements ModuleInterface
      */
     public function register(ServiceContainer $container)
     {
+        if (!$container->has(SourceAcquisitionService::class)) {
+            $container->factory(
+                SourceAcquisitionService::class,
+                static function (ServiceContainer $c) {
+                    return new SourceAcquisitionService(
+                        $c->get(SourceRepository::class),
+                        $c->get(AcquisitionEngine::class)
+                    );
+                }
+            );
+        }
+
         if (!$container->has(SourceCheckService::class)) {
             $container->factory(
                 SourceCheckService::class,
                 static function (ServiceContainer $c) {
                     return new SourceCheckService(
-                        $c->get(SourceRepository::class),
-                        $c->get(AcquisitionEngine::class)
+                        $c->get(SourceAcquisitionService::class)
                     );
                 }
             );

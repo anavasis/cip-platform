@@ -33,6 +33,7 @@ require_once $pluginDirectory . '/src/Core/Autoloader.php';
 
 use StudyMentor\ContentEngine\Acquisition\AcquisitionDiagnostics;
 use StudyMentor\ContentEngine\Acquisition\AcquisitionEngine;
+use StudyMentor\ContentEngine\Acquisition\SourceAcquisitionService;
 use StudyMentor\ContentEngine\Acquisition\AcquisitionManager;
 use StudyMentor\ContentEngine\Acquisition\DownloadManager;
 use StudyMentor\ContentEngine\Admin\SourceCheckService;
@@ -162,18 +163,18 @@ assertTrue(
 
 $versionRegistry = $container->get(VersionRegistry::class);
 assertSameValue(
-    'cip-003c-source-check-integration',
+    'cip-003d-collector-activation',
     $versionRegistry->get('platform_phase'),
-    'VersionRegistry platform phase must match CIP-003C label'
+    'VersionRegistry platform phase must match CIP-003D label'
 );
 
 $platformDiagnostics = $container->get(PlatformDiagnostics::class);
 $diagnostics = $platformDiagnostics->collect();
 
 assertSameValue(
-    'cip-003c-source-check-integration',
+    'cip-003d-collector-activation',
     $diagnostics['versions']['platform_phase'],
-    'PlatformDiagnostics phase label must match CIP-003C label'
+    'PlatformDiagnostics phase label must match CIP-003D label'
 );
 assertTrue(in_array('acquisition', $diagnostics['module_ids'], true), 'PlatformDiagnostics must include acquisition');
 assertTrue(
@@ -183,20 +184,14 @@ assertTrue(
 
 // --- SourceCheckService ownership via AcquisitionModule ---
 
-$sourceRepository = $container->get(SourceRepository::class);
-$acquisitionEngine = $container->get(AcquisitionEngine::class);
+$sourceAcquisitionService = $container->get(SourceAcquisitionService::class);
 $sourceCheckService = $container->get(SourceCheckService::class);
 
 assertInstance(SourceCheckService::class, $sourceCheckService, 'SourceCheckService must resolve from container');
 assertSameValue(
-    spl_object_id($sourceRepository),
-    spl_object_id(readPrivateProperty($sourceCheckService, 'repository')),
-    'SourceCheckService must share container SourceRepository'
-);
-assertSameValue(
-    spl_object_id($acquisitionEngine),
-    spl_object_id(readPrivateProperty($sourceCheckService, 'acquisitionEngine')),
-    'SourceCheckService must share container AcquisitionEngine'
+    spl_object_id($sourceAcquisitionService),
+    spl_object_id(readPrivateProperty($sourceCheckService, 'sourceAcquisitionService')),
+    'SourceCheckService must share container SourceAcquisitionService'
 );
 
 if ($failures !== array()) {
