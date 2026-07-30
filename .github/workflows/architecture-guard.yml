@@ -31,3 +31,6 @@ jobs:
 
       - name: Run CIP-003A Acquisition Platform Smoke Test
         run: php tests/cip003a-acquisition-platform-smoke.php
+
+      - name: Run CIP-003B Acquisition Engine Smoke Test
+        run: php tests/cip003b-acquisition-engine-smoke.php

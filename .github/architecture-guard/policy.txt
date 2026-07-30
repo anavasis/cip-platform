@@ -2,7 +2,7 @@ MODE
 subset
 
 MAX_FILES
-18
+25
 
 FORBIDDEN
 composer.json
@@ -37,12 +37,30 @@ src/Contracts/ModuleInterface.php
 src/Modules/CorePlatformModule.php
 src/Modules/SourceRegistryModule.php
 src/Modules/AcquisitionModule.php
+src/Acquisition/AcquisitionDiagnostics.php
+src/Acquisition/AcquisitionEngine.php
+src/Acquisition/AcquisitionManager.php
+src/Acquisition/AcquisitionResult.php
+src/Acquisition/CollectorMetrics.php
+src/Acquisition/DownloadManager.php
+src/Collectors/CollectorInterface.php
+src/Collectors/CollectorRegistry.php
+src/Collectors/SafeFeedCollector.php
+src/Contracts/ParserHandlerInterface.php
+src/Evidence/Evidence.php
+src/Evidence/EvidenceRepositoryInterface.php
+src/Evidence/InMemoryEvidenceRepository.php
+src/Fingerprint/FingerprintService.php
+src/Registry/ParserRegistry.php
+src/Registry/FeedPreviewParserHandler.php
+src/Registry/AsepHtmlParserHandler.php
 src/Registry/CapabilityRegistry.php
 src/Registry/CapabilityFlagMapper.php
 src/Registry/VersionRegistry.php
 src/Platform/PlatformDiagnostics.php
 tests/cip002-foundation-smoke.php
 tests/cip003a-acquisition-platform-smoke.php
+tests/cip003b-acquisition-engine-smoke.php
 .github/architecture-guard/policy.txt
 .github/architecture-guard/check.php
 .github/workflows/architecture-guard.yml
