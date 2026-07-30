@@ -10,6 +10,7 @@ defined('ABSPATH') || exit;
 final class Evidence
 {
     private $source;
+    private $sourceType;
     private $url;
     private $fetchedAt;
     private $httpStatus;
@@ -32,6 +33,7 @@ final class Evidence
     public function __construct(array $data)
     {
         $this->source = isset($data['source']) ? (string) $data['source'] : '';
+        $this->sourceType = isset($data['source_type']) ? (string) $data['source_type'] : '';
         $this->url = isset($data['url']) ? (string) $data['url'] : '';
         $this->fetchedAt = isset($data['fetched_at']) ? (string) $data['fetched_at'] : '';
         $this->httpStatus = isset($data['http_status']) ? (int) $data['http_status'] : 0;
@@ -56,6 +58,12 @@ final class Evidence
     public function source()
     {
         return $this->source;
+    }
+
+    /** @return string */
+    public function sourceType()
+    {
+        return $this->sourceType;
     }
 
     /** @return string */
@@ -151,12 +159,40 @@ final class Evidence
     {
         return array(
             'source' => $this->source,
+            'source_type' => $this->sourceType,
             'url' => $this->url,
             'fetched_at' => $this->fetchedAt,
             'http_status' => $this->httpStatus,
             'headers' => $this->headers,
             'mime_type' => $this->mimeType,
             'body' => $this->body,
+            'content_hash' => $this->contentHash,
+            'fetch_duration' => $this->fetchDuration,
+            'collector' => $this->collector,
+            'parser_profile' => $this->parserProfile,
+            'body_hash' => $this->bodyHash,
+            'identity_hash' => $this->identityHash,
+            'final_url' => $this->finalUrl,
+            'response_bytes' => $this->responseBytes,
+        );
+    }
+
+    /**
+     * Metadata-only export for diagnostics. Body content is never included.
+     *
+     * @return array<string, mixed>
+     */
+    public function toMetadataArray()
+    {
+        return array(
+            'source' => $this->source,
+            'source_type' => $this->sourceType,
+            'url' => $this->url,
+            'fetched_at' => $this->fetchedAt,
+            'http_status' => $this->httpStatus,
+            'headers' => $this->headers,
+            'mime_type' => $this->mimeType,
+            'body_omitted' => true,
             'content_hash' => $this->contentHash,
             'fetch_duration' => $this->fetchDuration,
             'collector' => $this->collector,

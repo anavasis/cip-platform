@@ -26,4 +26,14 @@ interface EvidenceRepositoryInterface
      * @return array<string, Evidence>
      */
     public function all();
+
+    /**
+     * @return int Total store() invocations, including overwrites.
+     */
+    public function storeOperations();
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function summaries();
 }

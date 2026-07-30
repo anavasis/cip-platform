@@ -198,7 +198,7 @@ $platformDiagnostics = $container->get(PlatformDiagnostics::class);
 $diagnostics = $platformDiagnostics->collect();
 
 assertSameValue(
-    'cip-003d-collector-activation',
+    'cip-003e-evidence-diagnostics',
     $diagnostics['versions']['platform_phase'],
     'PlatformDiagnostics phase label must match CIP-003D label'
 );

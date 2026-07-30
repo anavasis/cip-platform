@@ -7,6 +7,20 @@ defined('ABSPATH') || exit;
 final class FingerprintService
 {
     /**
+     * @return array<string, string>
+     */
+    public function describe()
+    {
+        return array(
+            'algorithm' => 'sha256',
+            'body_hash' => 'raw body',
+            'content_hash' => 'normalized body (trimmed, CRLF to LF)',
+            'identity_hash' => 'source_key|normalized_url',
+            'url_normalization' => 'trim, esc_url_raw if available, lowercase',
+        );
+    }
+
+    /**
      * @param string $body
      * @param string $url
      * @param string $sourceKey

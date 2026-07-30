@@ -65,6 +65,7 @@ tests/cip003a-acquisition-platform-smoke.php
 tests/cip003b-acquisition-engine-smoke.php
 tests/cip003c-source-check-integration-smoke.php
 tests/cip003d-collector-activation-smoke.php
+tests/cip003e-evidence-diagnostics-smoke.php
 .github/architecture-guard/policy.txt
 .github/architecture-guard/check.php
 .github/workflows/architecture-guard.yml

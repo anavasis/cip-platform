@@ -77,6 +77,7 @@ final class PlatformDiagnostics
             'acquisition_engine' => $acquisitionEngineStatus,
             'confirmations' => array(
                 'collector_routing' => $collectorRouting,
+                'evidence_store' => 'In-Memory',
                 'acquisition' => $this->capabilityRegistry->isEnabled(CapabilityRegistry::ACQUISITION)
                     ? 'Active'
                     : 'Inactive',
