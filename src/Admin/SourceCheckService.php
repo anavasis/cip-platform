@@ -2,22 +2,17 @@
 
 namespace StudyMentor\ContentEngine\Admin;
 
-use StudyMentor\ContentEngine\Acquisition\AcquisitionEngine;
-use StudyMentor\ContentEngine\Data\SourceRepository;
+use StudyMentor\ContentEngine\Acquisition\SourceAcquisitionService;
 
 defined('ABSPATH') || exit;
 
 final class SourceCheckService
 {
-    private $repository;
-    private $acquisitionEngine;
+    private $sourceAcquisitionService;
 
-    public function __construct(
-        SourceRepository $repository,
-        AcquisitionEngine $acquisitionEngine
-    ) {
-        $this->repository = $repository;
-        $this->acquisitionEngine = $acquisitionEngine;
+    public function __construct(SourceAcquisitionService $sourceAcquisitionService)
+    {
+        $this->sourceAcquisitionService = $sourceAcquisitionService;
     }
 
     /**
@@ -25,33 +20,7 @@ final class SourceCheckService
      */
     public function check($sourceId)
     {
-        $id = (int) $sourceId;
-
-        if ($id <= 0) {
-            return $this->buildError('invalid_id');
-        }
-
-        $source = $this->repository->findById($id);
-
-        if ($source === null) {
-            return $this->buildError('not_found');
-        }
-
-        $sourceType = isset($source['source_type']) ? strtolower(trim((string) $source['source_type'])) : '';
-        $parserProfile = isset($source['parser_profile']) ? trim((string) $source['parser_profile']) : '';
-        $feedUrl = isset($source['feed_url']) ? trim((string) $source['feed_url']) : '';
-        $allowedDomains = $this->decodeAllowedDomains(
-            isset($source['allowed_domains']) ? (string) $source['allowed_domains'] : ''
-        );
-
-        $acquisition = $this->acquisitionEngine->acquire(array(
-            'source_id' => $id,
-            'source_key' => isset($source['slug']) ? (string) $source['slug'] : (string) $id,
-            'url' => $feedUrl,
-            'allowed_domains' => $allowedDomains,
-            'source_type' => $sourceType,
-            'parser_profile' => $parserProfile,
-        ));
+        $acquisition = $this->sourceAcquisitionService->acquireFromSource($sourceId);
 
         $fetchResult = $acquisition->fetchResult();
         $parseResult = $acquisition->parseResult();
@@ -110,38 +79,6 @@ final class SourceCheckService
                 ? $parseResult['preview_items']
                 : array(),
         );
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function decodeAllowedDomains($jsonValue)
-    {
-        if (!is_string($jsonValue) || $jsonValue === '') {
-            return array();
-        }
-
-        $decoded = json_decode($jsonValue, true);
-
-        if (!is_array($decoded)) {
-            return array();
-        }
-
-        $domains = array();
-
-        foreach ($decoded as $domain) {
-            if (!is_string($domain)) {
-                continue;
-            }
-
-            $normalized = strtolower(trim($domain));
-
-            if ($normalized !== '') {
-                $domains[] = $normalized;
-            }
-        }
-
-        return array_values(array_unique($domains));
     }
 
     /**

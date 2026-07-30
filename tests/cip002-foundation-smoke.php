@@ -31,7 +31,7 @@ $GLOBALS['wpdb'] = (object) array(
 
 require_once $pluginDirectory . '/src/Core/Autoloader.php';
 
-use StudyMentor\ContentEngine\Acquisition\AcquisitionEngine;
+use StudyMentor\ContentEngine\Acquisition\SourceAcquisitionService;
 use StudyMentor\ContentEngine\Admin\BulkConnectivityAuditService;
 use StudyMentor\ContentEngine\Admin\Menu;
 use StudyMentor\ContentEngine\Admin\Pages\SourcesPage;
@@ -276,7 +276,7 @@ $diagnostics = $platformDiagnostics->collect();
 assertTrue(isset($diagnostics['versions']) && is_array($diagnostics['versions']), 'PlatformDiagnostics must return versions');
 assertSameValue('0.9.1', $diagnostics['versions']['plugin'], 'PlatformDiagnostics plugin version must match SMCE_VERSION');
 assertSameValue('1.0.0', $diagnostics['versions']['database'], 'PlatformDiagnostics database version must match SMCE_DB_VERSION');
-assertSameValue('cip-003c-source-check-integration', $diagnostics['versions']['platform_phase'], 'PlatformDiagnostics phase label must match');
+assertSameValue('cip-003d-collector-activation', $diagnostics['versions']['platform_phase'], 'PlatformDiagnostics phase label must match');
 assertTrue(isset($diagnostics['module_ids']) && is_array($diagnostics['module_ids']), 'PlatformDiagnostics must return module ids');
 assertTrue(in_array('core_platform', $diagnostics['module_ids'], true), 'PlatformDiagnostics must include core_platform');
 assertTrue(in_array('source_registry', $diagnostics['module_ids'], true), 'PlatformDiagnostics must include source_registry');
@@ -290,15 +290,15 @@ $safeFeedFetcher = $container->get(SafeFeedFetcher::class);
 $featureFlags = $container->get(FeatureFlags::class);
 
 $sourceCheckService = $container->get(SourceCheckService::class);
-$acquisitionEngine = $container->get(AcquisitionEngine::class);
+$sourceAcquisitionService = $container->get(SourceAcquisitionService::class);
 $bulkConnectivityAuditService = $container->get(BulkConnectivityAuditService::class);
 $sourcesPage = $container->get(SourcesPage::class);
 $sourceRegistryService = $container->get(SourceRegistryService::class);
 
 assertSameValue(
-    spl_object_id($sourceRepository),
-    spl_object_id(readPrivateProperty($sourceCheckService, 'repository')),
-    'SourceCheckService must share container SourceRepository'
+    spl_object_id($sourceAcquisitionService),
+    spl_object_id(readPrivateProperty($sourceCheckService, 'sourceAcquisitionService')),
+    'SourceCheckService must share container SourceAcquisitionService'
 );
 assertSameValue(
     spl_object_id($sourceRepository),
@@ -314,11 +314,6 @@ assertSameValue(
     spl_object_id($sourceRepository),
     spl_object_id(readPrivateProperty($sourceRegistryService, 'repository')),
     'SourceRegistryService must share container SourceRepository'
-);
-assertSameValue(
-    spl_object_id($acquisitionEngine),
-    spl_object_id(readPrivateProperty($sourceCheckService, 'acquisitionEngine')),
-    'SourceCheckService must share container AcquisitionEngine'
 );
 assertSameValue(
     spl_object_id($safeFeedFetcher),

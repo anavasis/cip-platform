@@ -71,8 +71,12 @@ final class AcquisitionDiagnostics
             $last['evidence']['body_omitted'] = true;
         }
 
+        $sourceTypeMap = $this->collectorRegistry->sourceTypeMap();
+
         return array(
             'acquisition_engine' => 'ready',
+            'collector_routing' => $sourceTypeMap !== array() ? 'ready' : 'not_ready',
+            'source_type_map' => $sourceTypeMap,
             'acquisition_engine_version' => AcquisitionEngine::VERSION,
             'platform_version' => $this->versionRegistry->get('platform'),
             'plugin_version' => $this->versionRegistry->get('plugin'),

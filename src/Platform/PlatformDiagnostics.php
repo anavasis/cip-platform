@@ -63,13 +63,20 @@ final class PlatformDiagnostics
             );
         }
 
+        $acquisitionEngineStatus = $this->acquisitionDiagnostics->status();
+        $collectorRouting = isset($acquisitionEngineStatus['collector_routing'])
+            && $acquisitionEngineStatus['collector_routing'] === 'ready'
+            ? 'Ready'
+            : 'Not ready';
+
         return array(
             'versions' => $this->versionRegistry->all(),
             'module_ids' => $moduleIds,
             'capabilities' => $capabilities,
             'feature_flags' => $flags,
-            'acquisition_engine' => $this->acquisitionDiagnostics->status(),
+            'acquisition_engine' => $acquisitionEngineStatus,
             'confirmations' => array(
+                'collector_routing' => $collectorRouting,
                 'acquisition' => $this->capabilityRegistry->isEnabled(CapabilityRegistry::ACQUISITION)
                     ? 'Active'
                     : 'Inactive',
