@@ -43,3 +43,6 @@ jobs:
 
       - name: Run CIP-003E Evidence Diagnostics Smoke Test
         run: php tests/cip003e-evidence-diagnostics-smoke.php
+
+      - name: Run CIP-004 Acquisition Capability Smoke Test
+        run: php tests/cip004-acquisition-capability-smoke.php

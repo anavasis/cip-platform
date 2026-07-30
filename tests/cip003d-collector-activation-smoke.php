@@ -188,7 +188,7 @@ assertSameValue(
 // --- Diagnostics routing-ready terminology ---
 
 $diagnosticsStatus = $acquisitionDiagnostics->status();
-assertSameValue('ready', $diagnosticsStatus['collector_routing'], 'Collector routing must report ready when mapped');
+assertSameValue('active', $diagnosticsStatus['collector_routing'], 'Collector routing must report active when capability enabled');
 assertTrue(
     isset($diagnosticsStatus['source_type_map']) && is_array($diagnosticsStatus['source_type_map']),
     'AcquisitionDiagnostics must expose source_type_map'
@@ -198,18 +198,18 @@ $platformDiagnostics = $container->get(PlatformDiagnostics::class);
 $diagnostics = $platformDiagnostics->collect();
 
 assertSameValue(
-    'cip-003e-evidence-diagnostics',
+    'cip-004-acquisition-capability-enablement',
     $diagnostics['versions']['platform_phase'],
     'PlatformDiagnostics phase label must match CIP-003D label'
 );
 assertSameValue(
-    'Ready',
+    'Active',
     $diagnostics['confirmations']['collector_routing'],
-    'PlatformDiagnostics collector_routing confirmation must be Ready'
+    'PlatformDiagnostics collector_routing confirmation must be Active'
 );
 assertTrue(
-    $diagnostics['confirmations']['acquisition'] === 'Inactive',
-    'PlatformDiagnostics acquisition confirmation must remain Inactive'
+    $diagnostics['confirmations']['acquisition'] === 'Active',
+    'PlatformDiagnostics acquisition confirmation must be Active'
 );
 
 // --- SourceCheckService contract preserved via SourceAcquisitionService ---
@@ -229,8 +229,8 @@ assertSameValue(0, $invalidCheck['item_count'], 'SourceCheckService invalid_id m
 
 $capabilityRegistry = $container->get(CapabilityRegistry::class);
 assertTrue(
-    $capabilityRegistry->isEnabled(CapabilityRegistry::ACQUISITION) === false,
-    'acquisition capability must remain disabled in CIP-003D'
+    $capabilityRegistry->isEnabled(CapabilityRegistry::ACQUISITION) === true,
+    'acquisition capability must be enabled in CIP-003D'
 );
 
 if ($failures !== array()) {

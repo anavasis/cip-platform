@@ -245,6 +245,11 @@ foreach ($capabilityRegistry->all() as $capabilityId => $enabled) {
         continue;
     }
 
+    if ($capabilityId === CapabilityRegistry::ACQUISITION) {
+        assertTrue($enabled === true, 'acquisition capability must be enabled');
+        continue;
+    }
+
     assertTrue($enabled === false, 'Capability must remain disabled: ' . $capabilityId);
 }
 
@@ -276,7 +281,7 @@ $diagnostics = $platformDiagnostics->collect();
 assertTrue(isset($diagnostics['versions']) && is_array($diagnostics['versions']), 'PlatformDiagnostics must return versions');
 assertSameValue('0.9.1', $diagnostics['versions']['plugin'], 'PlatformDiagnostics plugin version must match SMCE_VERSION');
 assertSameValue('1.0.0', $diagnostics['versions']['database'], 'PlatformDiagnostics database version must match SMCE_DB_VERSION');
-assertSameValue('cip-003e-evidence-diagnostics', $diagnostics['versions']['platform_phase'], 'PlatformDiagnostics phase label must match');
+assertSameValue('cip-004-acquisition-capability-enablement', $diagnostics['versions']['platform_phase'], 'PlatformDiagnostics phase label must match');
 assertTrue(isset($diagnostics['module_ids']) && is_array($diagnostics['module_ids']), 'PlatformDiagnostics must return module ids');
 assertTrue(in_array('core_platform', $diagnostics['module_ids'], true), 'PlatformDiagnostics must include core_platform');
 assertTrue(in_array('source_registry', $diagnostics['module_ids'], true), 'PlatformDiagnostics must include source_registry');

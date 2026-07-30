@@ -130,19 +130,24 @@ foreach ($capabilityRegistry->all() as $capabilityId => $enabled) {
         continue;
     }
 
+    if ($capabilityId === CapabilityRegistry::ACQUISITION) {
+        assertTrue($enabled === true, 'acquisition capability must be enabled');
+        continue;
+    }
+
     assertTrue($enabled === false, 'Capability must remain disabled: ' . $capabilityId);
 }
 
 assertTrue(
-    $capabilityRegistry->isEnabled(CapabilityRegistry::ACQUISITION) === false,
-    'acquisition capability must remain disabled in CIP-003A'
+    $capabilityRegistry->isEnabled(CapabilityRegistry::ACQUISITION) === true,
+    'acquisition capability must be enabled in CIP-003A'
 );
 
 // --- Version and diagnostics integration ---
 
 $versionRegistry = $container->get(VersionRegistry::class);
 assertSameValue(
-    'cip-003e-evidence-diagnostics',
+    'cip-004-acquisition-capability-enablement',
     $versionRegistry->get('platform_phase'),
     'VersionRegistry platform phase must match CIP-003D label'
 );
@@ -151,14 +156,14 @@ $platformDiagnostics = $container->get(PlatformDiagnostics::class);
 $diagnostics = $platformDiagnostics->collect();
 
 assertSameValue(
-    'cip-003e-evidence-diagnostics',
+    'cip-004-acquisition-capability-enablement',
     $diagnostics['versions']['platform_phase'],
     'PlatformDiagnostics phase label must match CIP-003D label'
 );
 assertTrue(in_array('acquisition', $diagnostics['module_ids'], true), 'PlatformDiagnostics must include acquisition');
 assertTrue(
-    $diagnostics['confirmations']['acquisition'] === 'Inactive',
-    'PlatformDiagnostics acquisition confirmation must remain Inactive'
+    $diagnostics['confirmations']['acquisition'] === 'Active',
+    'PlatformDiagnostics acquisition confirmation must be Active'
 );
 
 // --- SourceCheckService ownership via AcquisitionModule ---

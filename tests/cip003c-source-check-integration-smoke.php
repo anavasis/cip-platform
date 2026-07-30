@@ -192,10 +192,10 @@ assertSameValue(
 );
 
 $diagnosticsStatus = $acquisitionDiagnostics->status();
-assertSameValue('ready', $diagnosticsStatus['acquisition_engine'], 'AcquisitionDiagnostics must report engine ready');
+assertSameValue('active', $diagnosticsStatus['acquisition_engine'], 'AcquisitionDiagnostics must report engine active');
 assertTrue(
-    $diagnosticsStatus['capability_acquisition_enabled'] === false,
-    'AcquisitionDiagnostics must report acquisition capability disabled'
+    $diagnosticsStatus['capability_acquisition_enabled'] === true,
+    'AcquisitionDiagnostics must report acquisition capability enabled'
 );
 assertTrue(
     $diagnosticsStatus['acquisitions_recorded'] >= 1,
@@ -208,7 +208,7 @@ $platformDiagnostics = $container->get(PlatformDiagnostics::class);
 $diagnostics = $platformDiagnostics->collect();
 
 assertSameValue(
-    'cip-003e-evidence-diagnostics',
+    'cip-004-acquisition-capability-enablement',
     $diagnostics['versions']['platform_phase'],
     'PlatformDiagnostics phase label must match CIP-003D label'
 );
@@ -217,19 +217,19 @@ assertTrue(
     'PlatformDiagnostics must include acquisition_engine payload'
 );
 assertSameValue(
-    'ready',
+    'active',
     $diagnostics['acquisition_engine']['acquisition_engine'],
-    'PlatformDiagnostics acquisition_engine status must be ready'
+    'PlatformDiagnostics acquisition_engine status must be active'
 );
 assertTrue(
-    $diagnostics['confirmations']['acquisition'] === 'Inactive',
-    'PlatformDiagnostics acquisition confirmation must remain Inactive'
+    $diagnostics['confirmations']['acquisition'] === 'Active',
+    'PlatformDiagnostics acquisition confirmation must be Active'
 );
 
 $capabilityRegistry = $container->get(CapabilityRegistry::class);
 assertTrue(
-    $capabilityRegistry->isEnabled(CapabilityRegistry::ACQUISITION) === false,
-    'acquisition capability must remain disabled in CIP-003C'
+    $capabilityRegistry->isEnabled(CapabilityRegistry::ACQUISITION) === true,
+    'acquisition capability must be enabled in CIP-003C'
 );
 
 if ($failures !== array()) {
