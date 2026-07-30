@@ -46,3 +46,6 @@ jobs:
 
       - name: Run CIP-004 Acquisition Capability Smoke Test
         run: php tests/cip004-acquisition-capability-smoke.php
+
+      - name: Run CIP-005 Production Orchestrator Smoke Test
+        run: php tests/cip005-production-orchestrator-smoke.php

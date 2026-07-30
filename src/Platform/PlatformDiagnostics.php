@@ -101,6 +101,9 @@ final class PlatformDiagnostics
                 'collector_routing' => $collectorRouting,
                 'evidence_store' => 'In-Memory',
                 'startup_validation' => $startupValidation,
+                'production_orchestrator' => $this->productionOrchestratorConfirmation(
+                    $acquisitionEngineStatus
+                ),
                 'acquisition' => $this->capabilityRegistry->isEnabled(CapabilityRegistry::ACQUISITION)
                     ? 'Active'
                     : 'Inactive',
@@ -115,5 +118,32 @@ final class PlatformDiagnostics
                     : 'Inactive',
             ),
         );
+    }
+
+    /**
+     * @param array<string, mixed> $acquisitionEngineStatus
+     * @return string
+     */
+    private function productionOrchestratorConfirmation(array $acquisitionEngineStatus)
+    {
+        if (
+            !isset($acquisitionEngineStatus['production_orchestrator'])
+            || !is_array($acquisitionEngineStatus['production_orchestrator'])
+            || !isset($acquisitionEngineStatus['production_orchestrator']['status'])
+        ) {
+            return 'Not ready';
+        }
+
+        $status = (string) $acquisitionEngineStatus['production_orchestrator']['status'];
+
+        if ($status === 'running') {
+            return 'Active';
+        }
+
+        if ($status === 'ready' || $status === 'idle') {
+            return 'Ready';
+        }
+
+        return 'Not ready';
     }
 }

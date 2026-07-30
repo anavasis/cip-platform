@@ -67,6 +67,9 @@ tests/cip003c-source-check-integration-smoke.php
 tests/cip003d-collector-activation-smoke.php
 tests/cip003e-evidence-diagnostics-smoke.php
 tests/cip004-acquisition-capability-smoke.php
+tests/cip005-production-orchestrator-smoke.php
+src/Acquisition/ProductionAcquisitionOrchestrator.php
+src/Acquisition/AcquisitionRunResult.php
 src/Core/FeatureFlags.php
 .github/architecture-guard/policy.txt
 .github/architecture-guard/check.php

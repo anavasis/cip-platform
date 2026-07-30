@@ -109,8 +109,10 @@ $approvedFiles = array(
     'src/Acquisition/AcquisitionEngine.php',
     'src/Acquisition/AcquisitionManager.php',
     'src/Acquisition/AcquisitionResult.php',
+    'src/Acquisition/AcquisitionRunResult.php',
     'src/Acquisition/CollectorMetrics.php',
     'src/Acquisition/DownloadManager.php',
+    'src/Acquisition/ProductionAcquisitionOrchestrator.php',
     'src/Collectors/CollectorInterface.php',
     'src/Collectors/CollectorRegistry.php',
     'src/Collectors/SafeFeedCollector.php',
@@ -133,6 +135,7 @@ $approvedFiles = array(
     'tests/cip003d-collector-activation-smoke.php',
     'tests/cip003e-evidence-diagnostics-smoke.php',
     'tests/cip004-acquisition-capability-smoke.php',
+    'tests/cip005-production-orchestrator-smoke.php',
     '.github/architecture-guard/policy.txt',
     '.github/architecture-guard/check.php',
     '.github/workflows/architecture-guard.yml',
@@ -710,6 +713,7 @@ foreach ($iterator as $item) {
                     || $relativePath === 'tests/cip003d-collector-activation-smoke.php'
                     || $relativePath === 'tests/cip003e-evidence-diagnostics-smoke.php'
                     || $relativePath === 'tests/cip004-acquisition-capability-smoke.php'
+                    || $relativePath === 'tests/cip005-production-orchestrator-smoke.php'
                 )
             ) {
                 continue;
@@ -2082,8 +2086,8 @@ if (
     $failures[] = 'Connectivity Audit submenu must be registered after Bulk Sources and before Manual Intake.';
 }
 
-if (count($approvedFiles) !== 86) {
-    $failures[] = 'Approved file inventory must contain exactly 86 files.';
+if (count($approvedFiles) !== 89) {
+    $failures[] = 'Approved file inventory must contain exactly 89 files.';
 }
 
 $phpFilesToLint = array();
@@ -2273,7 +2277,7 @@ $cip002FoundationFiles = array(
     ),
     'src/Registry/VersionRegistry.php' => array(
         'final class VersionRegistry',
-        'cip-004-acquisition-capability-enablement',
+        'cip-005-production-orchestrator',
     ),
     'src/Platform/PlatformDiagnostics.php' => array(
         'final class PlatformDiagnostics',
