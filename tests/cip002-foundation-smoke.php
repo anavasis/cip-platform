@@ -48,6 +48,7 @@ use StudyMentor\ContentEngine\Core\ServiceContainer;
 use StudyMentor\ContentEngine\Data\SourceRegistryService;
 use StudyMentor\ContentEngine\Data\SourceRepository;
 use StudyMentor\ContentEngine\Http\SafeFeedFetcher;
+use StudyMentor\ContentEngine\Modules\AcquisitionModule;
 use StudyMentor\ContentEngine\Modules\CorePlatformModule;
 use StudyMentor\ContentEngine\Modules\SourceRegistryModule;
 use StudyMentor\ContentEngine\Platform\PlatformDiagnostics;
@@ -213,9 +214,11 @@ assertThrows(
 
 $moduleRegistry->register(new CorePlatformModule());
 $moduleRegistry->register(new SourceRegistryModule());
+$moduleRegistry->register(new AcquisitionModule());
 
 assertTrue($moduleRegistry->has('core_platform'), 'core_platform module must be registered');
 assertTrue($moduleRegistry->has('source_registry'), 'source_registry module must be registered');
+assertTrue($moduleRegistry->has('acquisition'), 'acquisition module must be registered');
 
 assertThrows(
     static function () use ($moduleRegistry) {
@@ -272,10 +275,11 @@ $diagnostics = $platformDiagnostics->collect();
 assertTrue(isset($diagnostics['versions']) && is_array($diagnostics['versions']), 'PlatformDiagnostics must return versions');
 assertSameValue('0.9.1', $diagnostics['versions']['plugin'], 'PlatformDiagnostics plugin version must match SMCE_VERSION');
 assertSameValue('1.0.0', $diagnostics['versions']['database'], 'PlatformDiagnostics database version must match SMCE_DB_VERSION');
-assertSameValue('cip-002-platform-foundation', $diagnostics['versions']['platform_phase'], 'PlatformDiagnostics phase label must match');
+assertSameValue('cip-003a-acquisition-platform-integration', $diagnostics['versions']['platform_phase'], 'PlatformDiagnostics phase label must match');
 assertTrue(isset($diagnostics['module_ids']) && is_array($diagnostics['module_ids']), 'PlatformDiagnostics must return module ids');
 assertTrue(in_array('core_platform', $diagnostics['module_ids'], true), 'PlatformDiagnostics must include core_platform');
 assertTrue(in_array('source_registry', $diagnostics['module_ids'], true), 'PlatformDiagnostics must include source_registry');
+assertTrue(in_array('acquisition', $diagnostics['module_ids'], true), 'PlatformDiagnostics must include acquisition');
 assertTrue(isset($diagnostics['capabilities']) && is_array($diagnostics['capabilities']), 'PlatformDiagnostics must return capabilities');
 
 // --- Shared dependency identities via reflection ---

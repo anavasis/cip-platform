@@ -36,11 +36,13 @@ src/Core/ModuleLoader.php
 src/Contracts/ModuleInterface.php
 src/Modules/CorePlatformModule.php
 src/Modules/SourceRegistryModule.php
+src/Modules/AcquisitionModule.php
 src/Registry/CapabilityRegistry.php
 src/Registry/CapabilityFlagMapper.php
 src/Registry/VersionRegistry.php
 src/Platform/PlatformDiagnostics.php
 tests/cip002-foundation-smoke.php
+tests/cip003a-acquisition-platform-smoke.php
 .github/architecture-guard/policy.txt
 .github/architecture-guard/check.php
 .github/workflows/architecture-guard.yml

@@ -6,6 +6,7 @@ use StudyMentor\ContentEngine\Admin\Menu;
 use StudyMentor\ContentEngine\Admin\SourceActionHandler;
 use StudyMentor\ContentEngine\Admin\SourceCatalogActionHandler;
 use StudyMentor\ContentEngine\Admin\SourceItemActionHandler;
+use StudyMentor\ContentEngine\Modules\AcquisitionModule;
 use StudyMentor\ContentEngine\Modules\CorePlatformModule;
 use StudyMentor\ContentEngine\Modules\SourceRegistryModule;
 
@@ -26,6 +27,7 @@ final class Plugin
 
         $moduleRegistry->register(new CorePlatformModule());
         $moduleRegistry->register(new SourceRegistryModule());
+        $moduleRegistry->register(new AcquisitionModule());
 
         $moduleLoader = new ModuleLoader($moduleRegistry, $container);
         $moduleLoader->load();

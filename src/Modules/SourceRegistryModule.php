@@ -83,20 +83,6 @@ final class SourceRegistryModule implements ModuleInterface
             $container->set(AsepAnnouncementsHtmlParser::class, new AsepAnnouncementsHtmlParser());
         }
 
-        if (!$container->has(SourceCheckService::class)) {
-            $container->factory(
-                SourceCheckService::class,
-                static function (ServiceContainer $c) {
-                    return new SourceCheckService(
-                        $c->get(SourceRepository::class),
-                        $c->get(SafeFeedFetcher::class),
-                        $c->get(FeedPreviewParser::class),
-                        $c->get(AsepAnnouncementsHtmlParser::class)
-                    );
-                }
-            );
-        }
-
         if (!$container->has(SourcesPage::class)) {
             $container->factory(
                 SourcesPage::class,
