@@ -30,16 +30,24 @@ $approvedDirectories = array(
     'src/Admin',
     'src/Admin/Pages',
     'src/Audit',
+    'src/Contracts',
     'src/Data',
     'src/Http',
     'src/Feed',
+    'src/Modules',
+    'src/Platform',
+    'src/Registry',
     'src/Support',
     'views',
     'views/admin',
     'tests',
+    '.github',
+    '.github/architecture-guard',
+    '.github/workflows',
 );
 
 $approvedFiles = array(
+    '.gitignore',
     'studymentor-content-engine.php',
     'readme.txt',
     'src/Core/Autoloader.php',
@@ -85,6 +93,20 @@ $approvedFiles = array(
     'src/Admin/BulkConnectivityAuditService.php',
     'src/Admin/Pages/ConnectivityAuditPage.php',
     'views/admin/connectivity-audit.php',
+    'src/Contracts/ModuleInterface.php',
+    'src/Core/ServiceContainer.php',
+    'src/Core/ModuleRegistry.php',
+    'src/Core/ModuleLoader.php',
+    'src/Modules/CorePlatformModule.php',
+    'src/Modules/SourceRegistryModule.php',
+    'src/Registry/CapabilityRegistry.php',
+    'src/Registry/CapabilityFlagMapper.php',
+    'src/Registry/VersionRegistry.php',
+    'src/Platform/PlatformDiagnostics.php',
+    'tests/cip002-foundation-smoke.php',
+    '.github/architecture-guard/policy.txt',
+    '.github/architecture-guard/check.php',
+    '.github/workflows/architecture-guard.yml',
     'tests/static-safety-check.php',
 );
 
@@ -604,6 +626,10 @@ foreach ($iterator as $item) {
     );
     $relativePath = str_replace(DIRECTORY_SEPARATOR, '/', $relativePath);
 
+    if ($relativePath === '.git' || strpos($relativePath, '.git/') === 0) {
+        continue;
+    }
+
     if ($item->isDir()) {
         $actualDirectories[] = $relativePath;
 
@@ -623,7 +649,9 @@ foreach ($iterator as $item) {
     $extension = strtolower(pathinfo($relativePath, PATHINFO_EXTENSION));
 
     if (in_array($extension, $blockedExtensions, true)) {
-        $failures[] = 'Forbidden file extension found: ' . $relativePath;
+        if ($relativePath !== '.github/workflows/architecture-guard.yml') {
+            $failures[] = 'Forbidden file extension found: ' . $relativePath;
+        }
     }
 
     $contents = file_get_contents($item->getPathname());
@@ -638,6 +666,16 @@ foreach ($iterator as $item) {
             if (
                 $relativePath === $safeFeedFetcherRelativePath
                 && $check['pattern'] === 'wp_remote_'
+            ) {
+                continue;
+            }
+
+            if (
+                $check['pattern'] === 'fwrite'
+                && (
+                    $relativePath === '.github/architecture-guard/check.php'
+                    || $relativePath === 'tests/cip002-foundation-smoke.php'
+                )
             ) {
                 continue;
             }
@@ -2009,8 +2047,8 @@ if (
     $failures[] = 'Connectivity Audit submenu must be registered after Bulk Sources and before Manual Intake.';
 }
 
-if (count($approvedFiles) !== 46) {
-    $failures[] = 'Approved file inventory must contain exactly 46 files.';
+if (count($approvedFiles) !== 61) {
+    $failures[] = 'Approved file inventory must contain exactly 61 files.';
 }
 
 $phpFilesToLint = array();
@@ -2137,6 +2175,133 @@ if (
     || strpos($featureContents, '=== true') === false
 ) {
     $failures[] = 'Unknown feature flag fallback could not be verified.';
+}
+
+$cip002FoundationFiles = array(
+    'src/Core/ServiceContainer.php' => array(
+        'final class ServiceContainer',
+        'public function has(',
+        'public function get(',
+        'public function set(',
+        'public function factory(',
+        'Service not registered:',
+        'Duplicate service registration:',
+    ),
+    'src/Core/ModuleRegistry.php' => array(
+        'final class ModuleRegistry',
+        'Duplicate module registration:',
+    ),
+    'src/Core/ModuleLoader.php' => array(
+        'final class ModuleLoader',
+        "const STATE_NOT_STARTED = 'not_started'",
+        "const STATE_LOADING = 'loading'",
+        "const STATE_LOADED = 'loaded'",
+        "const STATE_FAILED = 'failed'",
+        'ModuleLoader load already in progress',
+        'ModuleLoader already loaded',
+        'ModuleLoader load previously failed',
+    ),
+    'src/Contracts/ModuleInterface.php' => array(
+        'interface ModuleInterface',
+        'function register(ServiceContainer $container)',
+        'function boot(ServiceContainer $container)',
+    ),
+    'src/Modules/CorePlatformModule.php' => array(
+        'final class CorePlatformModule',
+        "return 'core_platform'",
+    ),
+    'src/Modules/SourceRegistryModule.php' => array(
+        'final class SourceRegistryModule',
+        "return 'source_registry'",
+    ),
+    'src/Registry/CapabilityRegistry.php' => array(
+        'final class CapabilityRegistry',
+        'SOURCE_REGISTRY',
+        'ACQUISITION',
+        'PUBLISHING',
+        'AI_PROVIDERS',
+    ),
+    'src/Registry/CapabilityFlagMapper.php' => array(
+        'final class CapabilityFlagMapper',
+        'isCapabilityEnabledByFlags',
+    ),
+    'src/Registry/VersionRegistry.php' => array(
+        'final class VersionRegistry',
+        'cip-002-platform-foundation',
+    ),
+    'src/Platform/PlatformDiagnostics.php' => array(
+        'final class PlatformDiagnostics',
+        'public function collect(',
+    ),
+);
+
+foreach ($cip002FoundationFiles as $relativePath => $snippets) {
+    $absolutePath = $pluginDirectory
+        . DIRECTORY_SEPARATOR
+        . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
+    $contents = is_file($absolutePath) ? file_get_contents($absolutePath) : false;
+
+    if ($contents === false) {
+        $failures[] = 'CIP-002 foundation file missing: ' . $relativePath;
+        continue;
+    }
+
+    foreach ($snippets as $snippet) {
+        if (strpos($contents, $snippet) === false) {
+            $failures[] = 'CIP-002 foundation file missing required snippet in '
+                . $relativePath
+                . ': '
+                . $snippet;
+        }
+    }
+}
+
+$cip002ForbiddenRuntimePaths = array(
+    'src/Modules/AcquisitionModule.php',
+    'src/Publish/PublisherInterface.php',
+    'src/Governance/ApprovalGateInterface.php',
+    'src/Workflow/WorkflowStageInterface.php',
+);
+
+foreach ($cip002ForbiddenRuntimePaths as $relativePath) {
+    if (is_file($pluginDirectory . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativePath))) {
+        $failures[] = 'CIP-002 forbidden foundation file found: ' . $relativePath;
+    }
+}
+
+$pluginBootstrapFile = $pluginDirectory
+    . DIRECTORY_SEPARATOR
+    . 'src'
+    . DIRECTORY_SEPARATOR
+    . 'Core'
+    . DIRECTORY_SEPARATOR
+    . 'Plugin.php';
+$pluginBootstrapContents = file_get_contents($pluginBootstrapFile);
+
+if ($pluginBootstrapContents === false) {
+    $failures[] = 'Plugin.php is missing or unreadable for CIP-002 foundation checks.';
+} else {
+    $requiredPluginSnippets = array(
+        'ServiceContainer',
+        'ModuleRegistry',
+        'ModuleLoader',
+        'CorePlatformModule',
+        'SourceRegistryModule',
+    );
+
+    foreach ($requiredPluginSnippets as $snippet) {
+        if (strpos($pluginBootstrapContents, $snippet) === false) {
+            $failures[] = 'Plugin.php missing CIP-002 foundation wiring: ' . $snippet;
+        }
+    }
+
+    if (
+        strpos($pluginBootstrapContents, 'wp_schedule_') !== false
+        || strpos($pluginBootstrapContents, 'register_rest_route') !== false
+        || strpos($pluginBootstrapContents, 'wp_insert_post') !== false
+    ) {
+        $failures[] = 'Plugin.php must not introduce scheduling, REST or publishing.';
+    }
 }
 
 if ($failures === array()) {

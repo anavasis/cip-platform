@@ -1,0 +1,30 @@
+name: Architecture Guard
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  architecture-guard:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Display PHP version
+        run: php -v
+
+      - name: Run Architecture Guard
+        run: php .github/architecture-guard/check.php
+
+      - name: Run Static Safety Check
+        run: php tests/static-safety-check.php
+
+      - name: Run CIP-002 Foundation Smoke Test
+        run: php tests/cip002-foundation-smoke.php
