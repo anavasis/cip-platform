@@ -28,3 +28,6 @@ jobs:
 
       - name: Run CIP-002 Foundation Smoke Test
         run: php tests/cip002-foundation-smoke.php
+
+      - name: Run CIP-003A Acquisition Platform Smoke Test
+        run: php tests/cip003a-acquisition-platform-smoke.php

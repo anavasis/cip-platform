@@ -99,11 +99,13 @@ $approvedFiles = array(
     'src/Core/ModuleLoader.php',
     'src/Modules/CorePlatformModule.php',
     'src/Modules/SourceRegistryModule.php',
+    'src/Modules/AcquisitionModule.php',
     'src/Registry/CapabilityRegistry.php',
     'src/Registry/CapabilityFlagMapper.php',
     'src/Registry/VersionRegistry.php',
     'src/Platform/PlatformDiagnostics.php',
     'tests/cip002-foundation-smoke.php',
+    'tests/cip003a-acquisition-platform-smoke.php',
     '.github/architecture-guard/policy.txt',
     '.github/architecture-guard/check.php',
     '.github/workflows/architecture-guard.yml',
@@ -675,6 +677,7 @@ foreach ($iterator as $item) {
                 && (
                     $relativePath === '.github/architecture-guard/check.php'
                     || $relativePath === 'tests/cip002-foundation-smoke.php'
+                    || $relativePath === 'tests/cip003a-acquisition-platform-smoke.php'
                 )
             ) {
                 continue;
@@ -2047,8 +2050,8 @@ if (
     $failures[] = 'Connectivity Audit submenu must be registered after Bulk Sources and before Manual Intake.';
 }
 
-if (count($approvedFiles) !== 61) {
-    $failures[] = 'Approved file inventory must contain exactly 61 files.';
+if (count($approvedFiles) !== 63) {
+    $failures[] = 'Approved file inventory must contain exactly 63 files.';
 }
 
 $phpFilesToLint = array();
@@ -2214,6 +2217,10 @@ $cip002FoundationFiles = array(
         'final class SourceRegistryModule',
         "return 'source_registry'",
     ),
+    'src/Modules/AcquisitionModule.php' => array(
+        'final class AcquisitionModule',
+        "return 'acquisition'",
+    ),
     'src/Registry/CapabilityRegistry.php' => array(
         'final class CapabilityRegistry',
         'SOURCE_REGISTRY',
@@ -2227,7 +2234,7 @@ $cip002FoundationFiles = array(
     ),
     'src/Registry/VersionRegistry.php' => array(
         'final class VersionRegistry',
-        'cip-002-platform-foundation',
+        'cip-003a-acquisition-platform-integration',
     ),
     'src/Platform/PlatformDiagnostics.php' => array(
         'final class PlatformDiagnostics',
@@ -2257,7 +2264,6 @@ foreach ($cip002FoundationFiles as $relativePath => $snippets) {
 }
 
 $cip002ForbiddenRuntimePaths = array(
-    'src/Modules/AcquisitionModule.php',
     'src/Publish/PublisherInterface.php',
     'src/Governance/ApprovalGateInterface.php',
     'src/Workflow/WorkflowStageInterface.php',
@@ -2287,6 +2293,7 @@ if ($pluginBootstrapContents === false) {
         'ModuleLoader',
         'CorePlatformModule',
         'SourceRegistryModule',
+        'AcquisitionModule',
     );
 
     foreach ($requiredPluginSnippets as $snippet) {
