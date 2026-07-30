@@ -128,6 +128,7 @@ $approvedFiles = array(
     'tests/cip002-foundation-smoke.php',
     'tests/cip003a-acquisition-platform-smoke.php',
     'tests/cip003b-acquisition-engine-smoke.php',
+    'tests/cip003c-source-check-integration-smoke.php',
     '.github/architecture-guard/policy.txt',
     '.github/architecture-guard/check.php',
     '.github/workflows/architecture-guard.yml',
@@ -701,6 +702,7 @@ foreach ($iterator as $item) {
                     || $relativePath === 'tests/cip002-foundation-smoke.php'
                     || $relativePath === 'tests/cip003a-acquisition-platform-smoke.php'
                     || $relativePath === 'tests/cip003b-acquisition-engine-smoke.php'
+                    || $relativePath === 'tests/cip003c-source-check-integration-smoke.php'
                 )
             ) {
                 continue;
@@ -2073,8 +2075,8 @@ if (
     $failures[] = 'Connectivity Audit submenu must be registered after Bulk Sources and before Manual Intake.';
 }
 
-if (count($approvedFiles) !== 81) {
-    $failures[] = 'Approved file inventory must contain exactly 81 files.';
+if (count($approvedFiles) !== 82) {
+    $failures[] = 'Approved file inventory must contain exactly 82 files.';
 }
 
 $phpFilesToLint = array();
@@ -2257,7 +2259,7 @@ $cip002FoundationFiles = array(
     ),
     'src/Registry/VersionRegistry.php' => array(
         'final class VersionRegistry',
-        'cip-003b-acquisition-engine-import',
+        'cip-003c-source-check-integration',
     ),
     'src/Platform/PlatformDiagnostics.php' => array(
         'final class PlatformDiagnostics',

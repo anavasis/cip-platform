@@ -37,6 +37,7 @@ src/Contracts/ModuleInterface.php
 src/Modules/CorePlatformModule.php
 src/Modules/SourceRegistryModule.php
 src/Modules/AcquisitionModule.php
+src/Admin/SourceCheckService.php
 src/Acquisition/AcquisitionDiagnostics.php
 src/Acquisition/AcquisitionEngine.php
 src/Acquisition/AcquisitionManager.php
@@ -61,6 +62,7 @@ src/Platform/PlatformDiagnostics.php
 tests/cip002-foundation-smoke.php
 tests/cip003a-acquisition-platform-smoke.php
 tests/cip003b-acquisition-engine-smoke.php
+tests/cip003c-source-check-integration-smoke.php
 .github/architecture-guard/policy.txt
 .github/architecture-guard/check.php
 .github/workflows/architecture-guard.yml

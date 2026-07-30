@@ -47,9 +47,7 @@ final class AcquisitionModule implements ModuleInterface
                 static function (ServiceContainer $c) {
                     return new SourceCheckService(
                         $c->get(SourceRepository::class),
-                        $c->get(SafeFeedFetcher::class),
-                        $c->get(FeedPreviewParser::class),
-                        $c->get(AsepAnnouncementsHtmlParser::class)
+                        $c->get(AcquisitionEngine::class)
                     );
                 }
             );
@@ -147,5 +145,15 @@ final class AcquisitionModule implements ModuleInterface
      */
     public function boot(ServiceContainer $container)
     {
+        $collectorRegistry = $container->get(CollectorRegistry::class);
+
+        if ($collectorRegistry instanceof CollectorRegistry) {
+            $collectorRegistry->mapSourceType('rss', 'safe_feed');
+            $collectorRegistry->mapSourceType('atom', 'safe_feed');
+            $collectorRegistry->mapSourceType('html', 'safe_feed');
+            $collectorRegistry->mapSourceType('json', 'safe_feed');
+            $collectorRegistry->mapSourceType('xml', 'safe_feed');
+            $collectorRegistry->mapSourceType('pdf', 'safe_feed');
+        }
     }
 }

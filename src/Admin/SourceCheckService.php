@@ -2,32 +2,22 @@
 
 namespace StudyMentor\ContentEngine\Admin;
 
+use StudyMentor\ContentEngine\Acquisition\AcquisitionEngine;
 use StudyMentor\ContentEngine\Data\SourceRepository;
-use StudyMentor\ContentEngine\Feed\AsepAnnouncementsHtmlParser;
-use StudyMentor\ContentEngine\Feed\FeedPreviewParser;
-use StudyMentor\ContentEngine\Http\SafeFeedFetcher;
 
 defined('ABSPATH') || exit;
 
 final class SourceCheckService
 {
-    private const FEED_SOURCE_TYPES = array('rss', 'atom');
-
     private $repository;
-    private $feedFetcher;
-    private $feedParser;
-    private $htmlParser;
+    private $acquisitionEngine;
 
     public function __construct(
         SourceRepository $repository,
-        SafeFeedFetcher $feedFetcher,
-        FeedPreviewParser $feedParser,
-        AsepAnnouncementsHtmlParser $htmlParser
+        AcquisitionEngine $acquisitionEngine
     ) {
         $this->repository = $repository;
-        $this->feedFetcher = $feedFetcher;
-        $this->feedParser = $feedParser;
-        $this->htmlParser = $htmlParser;
+        $this->acquisitionEngine = $acquisitionEngine;
     }
 
     /**
@@ -49,65 +39,60 @@ final class SourceCheckService
 
         $sourceType = isset($source['source_type']) ? strtolower(trim((string) $source['source_type'])) : '';
         $parserProfile = isset($source['parser_profile']) ? trim((string) $source['parser_profile']) : '';
-        $isFeedSourceType = in_array($sourceType, self::FEED_SOURCE_TYPES, true);
-        $isHtmlSourceType = $sourceType === 'html';
-
-        if (!$isFeedSourceType && !$isHtmlSourceType) {
-            return $this->buildError('unsupported_source_type');
-        }
-
-        if ($isHtmlSourceType && $parserProfile !== AsepAnnouncementsHtmlParser::SUPPORTED_PROFILE) {
-            return $this->buildError('unsupported_parser_profile');
-        }
-
         $feedUrl = isset($source['feed_url']) ? trim((string) $source['feed_url']) : '';
-
-        if ($feedUrl === '') {
-            return $this->buildError('missing_feed_url');
-        }
-
         $allowedDomains = $this->decodeAllowedDomains(
             isset($source['allowed_domains']) ? (string) $source['allowed_domains'] : ''
         );
 
-        if ($allowedDomains === array()) {
-            return $this->buildError('allowed_domains_invalid');
-        }
+        $acquisition = $this->acquisitionEngine->acquire(array(
+            'source_id' => $id,
+            'source_key' => isset($source['slug']) ? (string) $source['slug'] : (string) $id,
+            'url' => $feedUrl,
+            'allowed_domains' => $allowedDomains,
+            'source_type' => $sourceType,
+            'parser_profile' => $parserProfile,
+        ));
 
-        $fetchResult = $this->feedFetcher->fetch($feedUrl, $allowedDomains);
+        $fetchResult = $acquisition->fetchResult();
+        $parseResult = $acquisition->parseResult();
 
-        if ($fetchResult['success'] !== true) {
-            return $this->buildFetchError($fetchResult);
-        }
+        if ($acquisition->success() !== true) {
+            $errorCode = $acquisition->errorCode();
 
-        if ($isHtmlSourceType) {
-            $parseResult = $this->htmlParser->parse(
-                (string) $fetchResult['body'],
-                (string) $fetchResult['content_type'],
-                $parserProfile,
-                (string) $fetchResult['final_url'],
-                $allowedDomains
-            );
-        } else {
-            $parseResult = $this->feedParser->parse($fetchResult['body']);
-        }
+            if (
+                $fetchResult !== array()
+                && isset($fetchResult['success'])
+                && $fetchResult['success'] === true
+                && $parseResult !== array()
+            ) {
+                $mapped = $this->mapParserErrorCode($errorCode);
 
-        if ($parseResult['success'] !== true) {
-            return array(
-                'success' => false,
-                'error_code' => $this->mapParserErrorCode($parseResult['error_code']),
-                'error_message' => $this->messageForCode(
-                    $this->mapParserErrorCode($parseResult['error_code'])
-                ),
-                'requested_url' => (string) $fetchResult['requested_url'],
-                'final_url' => (string) $fetchResult['final_url'],
-                'http_status' => (int) $fetchResult['http_status'],
-                'content_type' => (string) $fetchResult['content_type'],
-                'response_size' => (int) $fetchResult['response_size'],
-                'format' => '',
-                'item_count' => 0,
-                'preview_items' => array(),
-            );
+                return array(
+                    'success' => false,
+                    'error_code' => $mapped,
+                    'error_message' => $this->messageForCode($mapped),
+                    'requested_url' => (string) $fetchResult['requested_url'],
+                    'final_url' => (string) $fetchResult['final_url'],
+                    'http_status' => (int) $fetchResult['http_status'],
+                    'content_type' => (string) $fetchResult['content_type'],
+                    'response_size' => (int) $fetchResult['response_size'],
+                    'format' => '',
+                    'item_count' => 0,
+                    'preview_items' => array(),
+                );
+            }
+
+            if (
+                $fetchResult !== array()
+                && (
+                    !isset($fetchResult['success'])
+                    || $fetchResult['success'] !== true
+                )
+            ) {
+                return $this->buildFetchError($fetchResult);
+            }
+
+            return $this->buildError($errorCode !== '' ? $errorCode : 'transport_error');
         }
 
         return array(
@@ -121,7 +106,9 @@ final class SourceCheckService
             'response_size' => (int) $fetchResult['response_size'],
             'format' => (string) $parseResult['format'],
             'item_count' => (int) $parseResult['item_count'],
-            'preview_items' => is_array($parseResult['preview_items']) ? $parseResult['preview_items'] : array(),
+            'preview_items' => is_array($parseResult['preview_items'])
+                ? $parseResult['preview_items']
+                : array(),
         );
     }
 

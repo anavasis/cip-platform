@@ -2,6 +2,7 @@
 
 namespace StudyMentor\ContentEngine\Modules;
 
+use StudyMentor\ContentEngine\Acquisition\AcquisitionDiagnostics;
 use StudyMentor\ContentEngine\Admin\Pages\DashboardPage;
 use StudyMentor\ContentEngine\Admin\Pages\DiagnosticsPage;
 use StudyMentor\ContentEngine\Admin\Pages\SettingsPage;
@@ -76,7 +77,8 @@ final class CorePlatformModule implements ModuleInterface
                         $c->get(\StudyMentor\ContentEngine\Core\ModuleRegistry::class),
                         $c->get(CapabilityRegistry::class),
                         $c->get(FeatureFlags::class),
-                        $c->get(VersionRegistry::class)
+                        $c->get(VersionRegistry::class),
+                        $c->get(AcquisitionDiagnostics::class)
                     );
                 }
             );

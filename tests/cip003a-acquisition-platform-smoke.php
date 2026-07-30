@@ -31,13 +31,13 @@ $GLOBALS['wpdb'] = (object) array(
 
 require_once $pluginDirectory . '/src/Core/Autoloader.php';
 
+use StudyMentor\ContentEngine\Acquisition\AcquisitionEngine;
 use StudyMentor\ContentEngine\Admin\SourceCheckService;
 use StudyMentor\ContentEngine\Core\ModuleLoader;
 use StudyMentor\ContentEngine\Core\ModuleRegistry;
 use StudyMentor\ContentEngine\Core\Plugin;
 use StudyMentor\ContentEngine\Core\ServiceContainer;
 use StudyMentor\ContentEngine\Data\SourceRepository;
-use StudyMentor\ContentEngine\Http\SafeFeedFetcher;
 use StudyMentor\ContentEngine\Modules\AcquisitionModule;
 use StudyMentor\ContentEngine\Modules\CorePlatformModule;
 use StudyMentor\ContentEngine\Modules\SourceRegistryModule;
@@ -143,18 +143,18 @@ assertTrue(
 
 $versionRegistry = $container->get(VersionRegistry::class);
 assertSameValue(
-    'cip-003b-acquisition-engine-import',
+    'cip-003c-source-check-integration',
     $versionRegistry->get('platform_phase'),
-    'VersionRegistry platform phase must match CIP-003B label'
+    'VersionRegistry platform phase must match CIP-003C label'
 );
 
 $platformDiagnostics = $container->get(PlatformDiagnostics::class);
 $diagnostics = $platformDiagnostics->collect();
 
 assertSameValue(
-    'cip-003b-acquisition-engine-import',
+    'cip-003c-source-check-integration',
     $diagnostics['versions']['platform_phase'],
-    'PlatformDiagnostics phase label must match CIP-003B label'
+    'PlatformDiagnostics phase label must match CIP-003C label'
 );
 assertTrue(in_array('acquisition', $diagnostics['module_ids'], true), 'PlatformDiagnostics must include acquisition');
 assertTrue(
@@ -165,7 +165,7 @@ assertTrue(
 // --- SourceCheckService ownership via AcquisitionModule ---
 
 $sourceRepository = $container->get(SourceRepository::class);
-$safeFeedFetcher = $container->get(SafeFeedFetcher::class);
+$acquisitionEngine = $container->get(AcquisitionEngine::class);
 $sourceCheckService = $container->get(SourceCheckService::class);
 
 assertInstance(SourceCheckService::class, $sourceCheckService, 'SourceCheckService must resolve from container');
@@ -175,9 +175,9 @@ assertSameValue(
     'SourceCheckService must share container SourceRepository'
 );
 assertSameValue(
-    spl_object_id($safeFeedFetcher),
-    spl_object_id(readPrivateProperty($sourceCheckService, 'feedFetcher')),
-    'SourceCheckService must share container SafeFeedFetcher'
+    spl_object_id($acquisitionEngine),
+    spl_object_id(readPrivateProperty($sourceCheckService, 'acquisitionEngine')),
+    'SourceCheckService must share container AcquisitionEngine'
 );
 
 if ($failures !== array()) {
