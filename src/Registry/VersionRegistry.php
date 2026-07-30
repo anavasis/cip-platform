@@ -6,7 +6,7 @@ defined('ABSPATH') || exit;
 
 final class VersionRegistry
 {
-    public const PLATFORM_PHASE = 'cip-003a-acquisition-platform-integration';
+    public const PLATFORM_PHASE = 'cip-003b-acquisition-engine-import';
 
     /** @var array<string, string> */
     private $versions = array();

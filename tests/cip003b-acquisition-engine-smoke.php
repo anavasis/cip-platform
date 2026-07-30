@@ -1,10 +1,10 @@
 <?php
 
 /**
- * CIP-003A acquisition platform integration smoke test.
+ * CIP-003B acquisition engine import smoke test.
  *
- * Exercises module registration and SourceCheckService ownership without
- * WordPress boot, handler registration, or network I/O.
+ * Exercises passive engine DI registration without acquisition runtime
+ * activation, WordPress boot, handler registration, or network I/O.
  */
 
 $pluginDirectory = dirname(__DIR__);
@@ -31,18 +31,29 @@ $GLOBALS['wpdb'] = (object) array(
 
 require_once $pluginDirectory . '/src/Core/Autoloader.php';
 
+use StudyMentor\ContentEngine\Acquisition\AcquisitionDiagnostics;
+use StudyMentor\ContentEngine\Acquisition\AcquisitionEngine;
+use StudyMentor\ContentEngine\Acquisition\AcquisitionManager;
+use StudyMentor\ContentEngine\Acquisition\DownloadManager;
 use StudyMentor\ContentEngine\Admin\SourceCheckService;
+use StudyMentor\ContentEngine\Collectors\CollectorRegistry;
 use StudyMentor\ContentEngine\Core\ModuleLoader;
 use StudyMentor\ContentEngine\Core\ModuleRegistry;
 use StudyMentor\ContentEngine\Core\Plugin;
 use StudyMentor\ContentEngine\Core\ServiceContainer;
 use StudyMentor\ContentEngine\Data\SourceRepository;
+use StudyMentor\ContentEngine\Evidence\EvidenceRepositoryInterface;
+use StudyMentor\ContentEngine\Evidence\InMemoryEvidenceRepository;
+use StudyMentor\ContentEngine\Feed\AsepAnnouncementsHtmlParser;
+use StudyMentor\ContentEngine\Feed\FeedPreviewParser;
+use StudyMentor\ContentEngine\Fingerprint\FingerprintService;
 use StudyMentor\ContentEngine\Http\SafeFeedFetcher;
 use StudyMentor\ContentEngine\Modules\AcquisitionModule;
 use StudyMentor\ContentEngine\Modules\CorePlatformModule;
 use StudyMentor\ContentEngine\Modules\SourceRegistryModule;
 use StudyMentor\ContentEngine\Platform\PlatformDiagnostics;
 use StudyMentor\ContentEngine\Registry\CapabilityRegistry;
+use StudyMentor\ContentEngine\Registry\ParserRegistry;
 use StudyMentor\ContentEngine\Registry\VersionRegistry;
 
 StudyMentor\ContentEngine\Core\Autoloader::register($pluginDirectory . '/src');
@@ -118,8 +129,16 @@ $moduleLoader = new ModuleLoader($moduleRegistry, $container);
 $moduleLoader->load();
 assertSameValue(ModuleLoader::STATE_LOADED, $moduleLoader->state(), 'ModuleLoader must reach loaded state');
 
-assertTrue($moduleRegistry->has('acquisition'), 'acquisition module must be registered');
-assertInstance(AcquisitionModule::class, $moduleRegistry->get('acquisition'), 'acquisition module must resolve from registry');
+// --- Passive engine services resolve from container ---
+
+assertInstance(CollectorRegistry::class, $container->get(CollectorRegistry::class), 'CollectorRegistry must resolve from container');
+assertInstance(ParserRegistry::class, $container->get(ParserRegistry::class), 'ParserRegistry must resolve from container');
+assertInstance(FingerprintService::class, $container->get(FingerprintService::class), 'FingerprintService must resolve from container');
+assertInstance(DownloadManager::class, $container->get(DownloadManager::class), 'DownloadManager must resolve from container');
+assertInstance(InMemoryEvidenceRepository::class, $container->get(EvidenceRepositoryInterface::class), 'EvidenceRepositoryInterface must resolve to InMemoryEvidenceRepository');
+assertInstance(AcquisitionDiagnostics::class, $container->get(AcquisitionDiagnostics::class), 'AcquisitionDiagnostics must resolve from container');
+assertInstance(AcquisitionManager::class, $container->get(AcquisitionManager::class), 'AcquisitionManager must resolve from container');
+assertInstance(AcquisitionEngine::class, $container->get(AcquisitionEngine::class), 'AcquisitionEngine must resolve from container');
 
 // --- Capability surface remains unchanged ---
 
@@ -136,7 +155,7 @@ foreach ($capabilityRegistry->all() as $capabilityId => $enabled) {
 
 assertTrue(
     $capabilityRegistry->isEnabled(CapabilityRegistry::ACQUISITION) === false,
-    'acquisition capability must remain disabled in CIP-003A'
+    'acquisition capability must remain disabled in CIP-003B'
 );
 
 // --- Version and diagnostics integration ---
@@ -162,10 +181,12 @@ assertTrue(
     'PlatformDiagnostics acquisition confirmation must remain Inactive'
 );
 
-// --- SourceCheckService ownership via AcquisitionModule ---
+// --- SourceCheckService ownership and unchanged runtime wiring ---
 
 $sourceRepository = $container->get(SourceRepository::class);
 $safeFeedFetcher = $container->get(SafeFeedFetcher::class);
+$feedPreviewParser = $container->get(FeedPreviewParser::class);
+$asepHtmlParser = $container->get(AsepAnnouncementsHtmlParser::class);
 $sourceCheckService = $container->get(SourceCheckService::class);
 
 assertInstance(SourceCheckService::class, $sourceCheckService, 'SourceCheckService must resolve from container');
@@ -179,9 +200,19 @@ assertSameValue(
     spl_object_id(readPrivateProperty($sourceCheckService, 'feedFetcher')),
     'SourceCheckService must share container SafeFeedFetcher'
 );
+assertSameValue(
+    spl_object_id($feedPreviewParser),
+    spl_object_id(readPrivateProperty($sourceCheckService, 'feedParser')),
+    'SourceCheckService must share container FeedPreviewParser'
+);
+assertSameValue(
+    spl_object_id($asepHtmlParser),
+    spl_object_id(readPrivateProperty($sourceCheckService, 'htmlParser')),
+    'SourceCheckService must share container AsepAnnouncementsHtmlParser'
+);
 
 if ($failures !== array()) {
-    fwrite(STDERR, "CIP-003A acquisition platform smoke test failed.\n");
+    fwrite(STDERR, "CIP-003B acquisition engine smoke test failed.\n");
 
     foreach ($failures as $failure) {
         fwrite(STDERR, '- ' . $failure . "\n");
@@ -190,5 +221,5 @@ if ($failures !== array()) {
     exit(1);
 }
 
-echo "CIP-003A acquisition platform smoke test passed.\n";
+echo "CIP-003B acquisition engine smoke test passed.\n";
 echo 'Assertions: ' . $passed . "\n";
