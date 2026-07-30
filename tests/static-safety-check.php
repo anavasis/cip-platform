@@ -626,6 +626,10 @@ foreach ($iterator as $item) {
     );
     $relativePath = str_replace(DIRECTORY_SEPARATOR, '/', $relativePath);
 
+    if ($relativePath === '.git' || strpos($relativePath, '.git/') === 0) {
+        continue;
+    }
+
     if ($item->isDir()) {
         $actualDirectories[] = $relativePath;
 
