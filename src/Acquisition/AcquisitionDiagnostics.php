@@ -29,6 +29,8 @@ final class AcquisitionDiagnostics
     private $lastResult;
     private $acquisitionCount;
     private $failureCount;
+    /** @var array<string, mixed>|null */
+    private $startupValidation;
 
     public function __construct(
         CollectorRegistry $collectorRegistry,
@@ -47,6 +49,16 @@ final class AcquisitionDiagnostics
         $this->lastResult = null;
         $this->acquisitionCount = 0;
         $this->failureCount = 0;
+        $this->startupValidation = null;
+    }
+
+    /**
+     * @param array<string, mixed> $validation
+     * @return void
+     */
+    public function recordStartupValidation(array $validation)
+    {
+        $this->startupValidation = $validation;
     }
 
     /**
@@ -82,17 +94,25 @@ final class AcquisitionDiagnostics
 
         $sourceTypeMap = $this->collectorRegistry->sourceTypeMap();
         $evidenceSummaries = $this->evidenceRepository->summaries();
+        $capabilityEnabled = $this->capabilityRegistry->isEnabled(CapabilityRegistry::ACQUISITION);
+        $startupValidation = $this->startupValidation !== null
+            ? $this->startupValidation
+            : array(
+                'status' => $capabilityEnabled ? 'pending' : 'not_applicable',
+                'checks' => array(),
+            );
 
         return array(
-            'acquisition_engine' => 'ready',
-            'collector_routing' => $sourceTypeMap !== array() ? 'ready' : 'not_ready',
+            'acquisition_engine' => $capabilityEnabled ? 'active' : 'ready',
+            'acquisition_runtime' => $capabilityEnabled ? 'active' : 'inactive',
+            'collector_routing' => $sourceTypeMap !== array()
+                ? ($capabilityEnabled ? 'active' : 'ready')
+                : 'not_ready',
             'source_type_map' => $sourceTypeMap,
             'acquisition_engine_version' => AcquisitionEngine::VERSION,
             'platform_version' => $this->versionRegistry->get('platform'),
             'plugin_version' => $this->versionRegistry->get('plugin'),
-            'capability_acquisition_enabled' => $this->capabilityRegistry->isEnabled(
-                CapabilityRegistry::ACQUISITION
-            ),
+            'capability_acquisition_enabled' => $capabilityEnabled,
             'collectors' => $collectorIds,
             'default_collector' => $this->collectorRegistry->defaultCollector()
                 ? $this->collectorRegistry->defaultCollector()->id()
@@ -105,6 +125,7 @@ final class AcquisitionDiagnostics
             'publishing' => 'disabled',
             'scheduler' => 'disabled',
             'ai' => 'disabled',
+            'startup_validation' => $startupValidation,
             'fingerprint' => $this->fingerprintService->describe(),
             'evidence' => array(
                 'store' => 'in_memory',

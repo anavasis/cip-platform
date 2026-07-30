@@ -132,6 +132,7 @@ $approvedFiles = array(
     'tests/cip003c-source-check-integration-smoke.php',
     'tests/cip003d-collector-activation-smoke.php',
     'tests/cip003e-evidence-diagnostics-smoke.php',
+    'tests/cip004-acquisition-capability-smoke.php',
     '.github/architecture-guard/policy.txt',
     '.github/architecture-guard/check.php',
     '.github/workflows/architecture-guard.yml',
@@ -503,7 +504,7 @@ $immutableNormalizedHashes = array(
     'src/Core/SchemaManager.php' => 'df0eb54171881fab45ccab6b206bca4839439cc162e2871a4a4ca1296042aece',
     'src/Core/Activator.php' => 'e1baf8147c46521dd22fd57a2e85c00bf373493d6342922988324257798b7d98',
     'src/Core/Deactivator.php' => '9eec76c184d78539b48b42140242136e80bef75550e7d47fbb9c6ae401929d94',
-    'src/Core/FeatureFlags.php' => '1a1ef832cce11d6aafd9e4653fa41b79f7b34a7fd0f2cb4ed273bd559331092c',
+    'src/Core/FeatureFlags.php' => '897f89a2116f5ce1c4ef4b2594f330d0c8d435d06c5f0de33da9336821012210',
 );
 
 $destructiveSqlPatterns = array(
@@ -708,6 +709,7 @@ foreach ($iterator as $item) {
                     || $relativePath === 'tests/cip003c-source-check-integration-smoke.php'
                     || $relativePath === 'tests/cip003d-collector-activation-smoke.php'
                     || $relativePath === 'tests/cip003e-evidence-diagnostics-smoke.php'
+                    || $relativePath === 'tests/cip004-acquisition-capability-smoke.php'
                 )
             ) {
                 continue;
@@ -2080,8 +2082,8 @@ if (
     $failures[] = 'Connectivity Audit submenu must be registered after Bulk Sources and before Manual Intake.';
 }
 
-if (count($approvedFiles) !== 85) {
-    $failures[] = 'Approved file inventory must contain exactly 85 files.';
+if (count($approvedFiles) !== 86) {
+    $failures[] = 'Approved file inventory must contain exactly 86 files.';
 }
 
 $phpFilesToLint = array();
@@ -2196,6 +2198,13 @@ if ($featureContents === false || $foundFlagNames !== $expectedFlags) {
             continue;
         }
 
+        if ($name === 'source_collection') {
+            if ($value !== 'true') {
+                $failures[] = 'source_collection feature flag must be true.';
+            }
+            continue;
+        }
+
         if ($value !== 'false') {
             $failures[] = 'Feature flag is not false: ' . $name;
         }
@@ -2264,7 +2273,7 @@ $cip002FoundationFiles = array(
     ),
     'src/Registry/VersionRegistry.php' => array(
         'final class VersionRegistry',
-        'cip-003e-evidence-diagnostics',
+        'cip-004-acquisition-capability-enablement',
     ),
     'src/Platform/PlatformDiagnostics.php' => array(
         'final class PlatformDiagnostics',

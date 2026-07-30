@@ -8,7 +8,7 @@ final class FeatureFlags
 {
     private const FLAGS = array(
         'source_registry' => true,
-        'source_collection' => false,
+        'source_collection' => true,
         'document_collection' => false,
         'extraction' => false,
         'ai_providers' => false,

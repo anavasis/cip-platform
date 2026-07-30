@@ -168,5 +168,50 @@ final class AcquisitionModule implements ModuleInterface
             $collectorRegistry->mapSourceType('xml', 'safe_feed');
             $collectorRegistry->mapSourceType('pdf', 'safe_feed');
         }
+
+        $capabilityRegistry = $container->get(CapabilityRegistry::class);
+        $parserRegistry = $container->get(ParserRegistry::class);
+        $acquisitionDiagnostics = $container->get(AcquisitionDiagnostics::class);
+
+        if (!$capabilityRegistry->isEnabled(CapabilityRegistry::ACQUISITION)) {
+            $acquisitionDiagnostics->recordStartupValidation(array(
+                'status' => 'not_applicable',
+                'checks' => array(),
+            ));
+
+            return;
+        }
+
+        $sourceTypeMap = $collectorRegistry instanceof CollectorRegistry
+            ? $collectorRegistry->sourceTypeMap()
+            : array();
+        $checks = array(
+            'safe_feed_collector' => $collectorRegistry instanceof CollectorRegistry
+                && $collectorRegistry->has('safe_feed'),
+            'parser_handlers' => $parserRegistry instanceof ParserRegistry
+                && count($parserRegistry->all()) > 0,
+            'source_registry_capability' => $capabilityRegistry->isEnabled(
+                CapabilityRegistry::SOURCE_REGISTRY
+            ),
+        );
+
+        foreach (array('rss', 'atom', 'html') as $sourceType) {
+            $checks['source_type_' . $sourceType] = isset($sourceTypeMap[$sourceType])
+                && $sourceTypeMap[$sourceType] === 'safe_feed';
+        }
+
+        $passed = true;
+
+        foreach ($checks as $checkPassed) {
+            if ($checkPassed !== true) {
+                $passed = false;
+                break;
+            }
+        }
+
+        $acquisitionDiagnostics->recordStartupValidation(array(
+            'status' => $passed ? 'passed' : 'failed',
+            'checks' => $checks,
+        ));
     }
 }

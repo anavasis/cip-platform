@@ -265,7 +265,7 @@ $platformDiagnostics = $container->get(PlatformDiagnostics::class);
 $diagnostics = $platformDiagnostics->collect();
 
 assertSameValue(
-    'cip-003e-evidence-diagnostics',
+    'cip-004-acquisition-capability-enablement',
     $diagnostics['versions']['platform_phase'],
     'PlatformDiagnostics phase label must match CIP-003E label'
 );
@@ -275,21 +275,21 @@ assertSameValue(
     'PlatformDiagnostics evidence_store confirmation must be In-Memory'
 );
 assertTrue(
-    $diagnostics['confirmations']['acquisition'] === 'Inactive',
-    'PlatformDiagnostics acquisition confirmation must remain Inactive'
+    $diagnostics['confirmations']['acquisition'] === 'Active',
+    'PlatformDiagnostics acquisition confirmation must be Active'
 );
 
 $versionRegistry = $container->get(VersionRegistry::class);
 assertSameValue(
-    'cip-003e-evidence-diagnostics',
+    'cip-004-acquisition-capability-enablement',
     $versionRegistry->get('platform_phase'),
     'VersionRegistry platform phase must match CIP-003E label'
 );
 
 $capabilityRegistry = $container->get(CapabilityRegistry::class);
 assertTrue(
-    $capabilityRegistry->isEnabled(CapabilityRegistry::ACQUISITION) === false,
-    'acquisition capability must remain disabled in CIP-003E'
+    $capabilityRegistry->isEnabled(CapabilityRegistry::ACQUISITION) === true,
+    'acquisition capability must be enabled in CIP-003E'
 );
 
 if ($failures !== array()) {

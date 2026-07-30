@@ -64,10 +64,32 @@ final class PlatformDiagnostics
         }
 
         $acquisitionEngineStatus = $this->acquisitionDiagnostics->status();
-        $collectorRouting = isset($acquisitionEngineStatus['collector_routing'])
-            && $acquisitionEngineStatus['collector_routing'] === 'ready'
-            ? 'Ready'
-            : 'Not ready';
+        $collectorRoutingState = isset($acquisitionEngineStatus['collector_routing'])
+            ? (string) $acquisitionEngineStatus['collector_routing']
+            : '';
+        $collectorRouting = 'Not ready';
+
+        if ($collectorRoutingState === 'active') {
+            $collectorRouting = 'Active';
+        } elseif ($collectorRoutingState === 'ready') {
+            $collectorRouting = 'Ready';
+        }
+
+        $startupValidation = 'Not applicable';
+
+        if (
+            isset($acquisitionEngineStatus['startup_validation'])
+            && is_array($acquisitionEngineStatus['startup_validation'])
+            && isset($acquisitionEngineStatus['startup_validation']['status'])
+        ) {
+            $validationStatus = (string) $acquisitionEngineStatus['startup_validation']['status'];
+
+            if ($validationStatus === 'passed') {
+                $startupValidation = 'Passed';
+            } elseif ($validationStatus === 'failed') {
+                $startupValidation = 'Failed';
+            }
+        }
 
         return array(
             'versions' => $this->versionRegistry->all(),
@@ -78,6 +100,7 @@ final class PlatformDiagnostics
             'confirmations' => array(
                 'collector_routing' => $collectorRouting,
                 'evidence_store' => 'In-Memory',
+                'startup_validation' => $startupValidation,
                 'acquisition' => $this->capabilityRegistry->isEnabled(CapabilityRegistry::ACQUISITION)
                     ? 'Active'
                     : 'Inactive',
