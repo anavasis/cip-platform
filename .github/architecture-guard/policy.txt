@@ -118,6 +118,15 @@ src/PromptContext/PromptContextBuilder.php
 src/PromptContext/PromptContextValidator.php
 src/PromptContext/PromptContextRepositoryInterface.php
 tests/build002-prompt-context-smoke.php
+src/Modules/PromptPackageModule.php
+src/PromptPackage/PromptPackageStatus.php
+src/PromptPackage/BlueprintReference.php
+src/PromptPackage/PromptTemplateReference.php
+src/PromptPackage/PromptPackage.php
+src/PromptPackage/PromptPackageBuilder.php
+src/PromptPackage/PromptPackageValidator.php
+src/PromptPackage/PromptPackageRepositoryInterface.php
+tests/build003-prompt-package-smoke.php
 src/Core/FeatureFlags.php
 .github/architecture-guard/policy.txt
 .github/architecture-guard/check.php
