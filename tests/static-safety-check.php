@@ -43,6 +43,7 @@ $approvedDirectories = array(
     'src/PromptContext',
     'src/PromptPackage',
     'src/GenerationRequest',
+    'src/GenerationResult',
     'src/Modules',
     'src/Platform',
     'src/Registry',
@@ -114,6 +115,7 @@ $approvedFiles = array(
     'src/Modules/PromptContextModule.php',
     'src/Modules/PromptPackageModule.php',
     'src/Modules/GenerationRequestModule.php',
+    'src/Modules/GenerationResultModule.php',
     'src/Blueprint/ArticleType.php',
     'src/Blueprint/BlueprintStatus.php',
     'src/Blueprint/Tone.php',
@@ -155,6 +157,14 @@ $approvedFiles = array(
     'src/GenerationRequest/GenerationRequestValidator.php',
     'src/GenerationRequest/GenerationRequestRepositoryInterface.php',
     'tests/build004-generation-request-smoke.php',
+    'src/GenerationResult/GenerationResultStatus.php',
+    'src/GenerationResult/ProviderExecutionReference.php',
+    'src/GenerationResult/GeneratedArtifactReference.php',
+    'src/GenerationResult/GenerationResult.php',
+    'src/GenerationResult/GenerationResultBuilder.php',
+    'src/GenerationResult/GenerationResultValidator.php',
+    'src/GenerationResult/GenerationResultRepositoryInterface.php',
+    'tests/build005-generation-result-smoke.php',
     'src/Announcement/AnnouncementCandidate.php',
     'src/Announcement/AnnouncementIdentityService.php',
     'src/Announcement/AnnouncementItemExtractor.php',
@@ -791,6 +801,7 @@ foreach ($iterator as $item) {
                     || $relativePath === 'tests/build002-prompt-context-smoke.php'
                     || $relativePath === 'tests/build003-prompt-package-smoke.php'
                     || $relativePath === 'tests/build004-generation-request-smoke.php'
+                    || $relativePath === 'tests/build005-generation-result-smoke.php'
                 )
             ) {
                 continue;
@@ -2188,8 +2199,8 @@ if (
     $failures[] = 'Editorial Workspace submenus must be registered after Diagnostics in workspace order.';
 }
 
-if (count($approvedFiles) !== 152) {
-    $failures[] = 'Approved file inventory must contain exactly 152 files.';
+if (count($approvedFiles) !== 161) {
+    $failures[] = 'Approved file inventory must contain exactly 161 files.';
 }
 
 $phpFilesToLint = array();
@@ -2386,6 +2397,10 @@ $cip002FoundationFiles = array(
         'final class GenerationRequestModule',
         "return 'generation_request'",
     ),
+    'src/Modules/GenerationResultModule.php' => array(
+        'final class GenerationResultModule',
+        "return 'generation_result'",
+    ),
     'src/Registry/CapabilityRegistry.php' => array(
         'final class CapabilityRegistry',
         'SOURCE_REGISTRY',
@@ -2464,6 +2479,7 @@ if ($pluginBootstrapContents === false) {
         'PromptContextModule',
         'PromptPackageModule',
         'GenerationRequestModule',
+        'GenerationResultModule',
     );
 
     foreach ($requiredPluginSnippets as $snippet) {
