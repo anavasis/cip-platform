@@ -314,13 +314,13 @@ foreach ($requestFiles as $file) {
     $ddlToken = 'CREATE' . ' TABLE';
     $restToken = 'register_' . 'rest_route';
     $menuToken = 'add_' . 'menu_page';
-    $httpToken = 'wp_remote_';
-    $curlToken = 'curl_';
+    $httpToken = 'wp_' . 'remote_';
+    $curlToken = 'cu' . 'rl_';
     $vendorA = 'open' . 'ai';
     $vendorB = 'anthrop' . 'ic';
     $vendorC = 'gem' . 'ini';
-    $queueToken = 'wp_schedule_';
-    $resultToken = 'GenerationResult';
+    $queueToken = 'wp_' . 'schedule_';
+    $resultToken = 'Generation' . 'Result';
     $systemPromptToken = 'You are a';
     assertTrue(strpos($contents, $dbToken) === false, basename($file) . ' must not use db handle');
     assertTrue(stripos($contents, $ddlToken) === false, basename($file) . ' must not DDL');
