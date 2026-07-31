@@ -6,6 +6,9 @@ use StudyMentor\ContentEngine\Admin\Pages\BulkSourcesPage;
 use StudyMentor\ContentEngine\Admin\Pages\ConnectivityAuditPage;
 use StudyMentor\ContentEngine\Admin\Pages\DashboardPage;
 use StudyMentor\ContentEngine\Admin\Pages\DiagnosticsPage;
+use StudyMentor\ContentEngine\Admin\Pages\EditorialAnnouncementsPage;
+use StudyMentor\ContentEngine\Admin\Pages\EditorialQueuePage;
+use StudyMentor\ContentEngine\Admin\Pages\EditorialWorkspacePage;
 use StudyMentor\ContentEngine\Admin\Pages\ImportedItemsPage;
 use StudyMentor\ContentEngine\Admin\Pages\ManualAnnouncementsPage;
 use StudyMentor\ContentEngine\Admin\Pages\SettingsPage;
@@ -19,6 +22,9 @@ final class Menu
     private $dashboardPage;
     private $settingsPage;
     private $diagnosticsPage;
+    private $editorialWorkspacePage;
+    private $editorialAnnouncementsPage;
+    private $editorialQueuePage;
     private $featureFlags;
     private $sourcesPage;
     private $bulkSourcesPage;
@@ -30,6 +36,9 @@ final class Menu
         DashboardPage $dashboardPage,
         SettingsPage $settingsPage,
         DiagnosticsPage $diagnosticsPage,
+        EditorialWorkspacePage $editorialWorkspacePage,
+        EditorialAnnouncementsPage $editorialAnnouncementsPage,
+        EditorialQueuePage $editorialQueuePage,
         FeatureFlags $featureFlags,
         SourcesPage $sourcesPage,
         BulkSourcesPage $bulkSourcesPage,
@@ -40,6 +49,9 @@ final class Menu
         $this->dashboardPage = $dashboardPage;
         $this->settingsPage = $settingsPage;
         $this->diagnosticsPage = $diagnosticsPage;
+        $this->editorialWorkspacePage = $editorialWorkspacePage;
+        $this->editorialAnnouncementsPage = $editorialAnnouncementsPage;
+        $this->editorialQueuePage = $editorialQueuePage;
         $this->featureFlags = $featureFlags;
         $this->sourcesPage = $sourcesPage;
         $this->bulkSourcesPage = $bulkSourcesPage;
@@ -80,6 +92,33 @@ final class Menu
             'manage_options',
             'smce-diagnostics',
             array($this->diagnosticsPage, 'render')
+        );
+
+        add_submenu_page(
+            'smce-dashboard',
+            'Editorial Workspace',
+            'Editorial Workspace',
+            'manage_options',
+            'smce-editorial',
+            array($this->editorialWorkspacePage, 'render')
+        );
+
+        add_submenu_page(
+            'smce-dashboard',
+            'Announcements',
+            'Announcements',
+            'manage_options',
+            'smce-editorial-announcements',
+            array($this->editorialAnnouncementsPage, 'render')
+        );
+
+        add_submenu_page(
+            'smce-dashboard',
+            'Editorial Queue',
+            'Editorial Queue',
+            'manage_options',
+            'smce-editorial-queue',
+            array($this->editorialQueuePage, 'render')
         );
 
         if ($this->featureFlags->isEnabled('source_registry')) {

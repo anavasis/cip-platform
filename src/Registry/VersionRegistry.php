@@ -6,7 +6,7 @@ defined('ABSPATH') || exit;
 
 final class VersionRegistry
 {
-    public const PLATFORM_PHASE = 'editorial-spine-phase1-announcement-lifecycle';
+    public const PLATFORM_PHASE = 'editorial-workspace-phase2';
 
     /** @var array<string, string> */
     private $versions = array();

@@ -300,7 +300,7 @@ assertSameValue(1, $candidateIngest->newCount(), 'ingestCandidates must create n
 $platformDiagnostics = $container->get(PlatformDiagnostics::class);
 $diagnostics = $platformDiagnostics->collect();
 assertSameValue(
-    'editorial-spine-phase1-announcement-lifecycle',
+    'editorial-workspace-phase2',
     $diagnostics['versions']['platform_phase'],
     'Platform phase must match Editorial Spine Phase 1'
 );
@@ -318,7 +318,7 @@ assertTrue(
 
 $versionRegistry = $container->get(VersionRegistry::class);
 assertSameValue(
-    'editorial-spine-phase1-announcement-lifecycle',
+    'editorial-workspace-phase2',
     $versionRegistry->get('platform_phase'),
     'VersionRegistry phase must match Editorial Spine Phase 1'
 );
