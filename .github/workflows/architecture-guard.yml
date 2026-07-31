@@ -49,3 +49,6 @@ jobs:
 
       - name: Run CIP-005 Production Orchestrator Smoke Test
         run: php tests/cip005-production-orchestrator-smoke.php
+
+      - name: Run Editorial Spine Phase 1 Smoke Test
+        run: php tests/editorial-spine-phase1-smoke.php

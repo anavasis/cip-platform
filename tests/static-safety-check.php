@@ -38,6 +38,7 @@ $approvedDirectories = array(
     'src/Fingerprint',
     'src/Http',
     'src/Feed',
+    'src/Announcement',
     'src/Modules',
     'src/Platform',
     'src/Registry',
@@ -104,6 +105,15 @@ $approvedFiles = array(
     'src/Modules/CorePlatformModule.php',
     'src/Modules/SourceRegistryModule.php',
     'src/Modules/AcquisitionModule.php',
+    'src/Modules/AnnouncementModule.php',
+    'src/Announcement/AnnouncementCandidate.php',
+    'src/Announcement/AnnouncementIdentityService.php',
+    'src/Announcement/AnnouncementItemExtractor.php',
+    'src/Announcement/AnnouncementLifecycleService.php',
+    'src/Announcement/EditorialIngestionService.php',
+    'src/Announcement/LifecycleBatchResult.php',
+    'src/Announcement/LifecycleDecision.php',
+    'src/Announcement/LifecycleOutcome.php',
     'src/Acquisition/SourceAcquisitionService.php',
     'src/Acquisition/AcquisitionDiagnostics.php',
     'src/Acquisition/AcquisitionEngine.php',
@@ -136,6 +146,7 @@ $approvedFiles = array(
     'tests/cip003e-evidence-diagnostics-smoke.php',
     'tests/cip004-acquisition-capability-smoke.php',
     'tests/cip005-production-orchestrator-smoke.php',
+    'tests/editorial-spine-phase1-smoke.php',
     '.github/architecture-guard/policy.txt',
     '.github/architecture-guard/check.php',
     '.github/workflows/architecture-guard.yml',
@@ -263,9 +274,13 @@ $databasePatternsForbiddenInSourceRepository = array(
 $requiredSourceItemRepositorySnippets = array(
     '$wpdb',
     '->prepare',
-    '->get_var',
+    '->get_row',
     '->insert',
+    '->update',
     'existsBySourceAndIdentityHash',
+    'findBySourceAndIdentityHash',
+    'markUnchanged',
+    'applyContentUpdate',
     'identity_hash',
     'smce_source_items',
 );
@@ -276,7 +291,6 @@ $databasePatternsForbiddenInSourceItemRepository = array(
     'add_option',
     'update_option',
     'delete_option',
-    '->update(',
     '->delete(',
     '->replace(',
     '->query(',
@@ -714,6 +728,7 @@ foreach ($iterator as $item) {
                     || $relativePath === 'tests/cip003e-evidence-diagnostics-smoke.php'
                     || $relativePath === 'tests/cip004-acquisition-capability-smoke.php'
                     || $relativePath === 'tests/cip005-production-orchestrator-smoke.php'
+                    || $relativePath === 'tests/editorial-spine-phase1-smoke.php'
                 )
             ) {
                 continue;
@@ -801,11 +816,13 @@ foreach ($iterator as $item) {
         }
 
         if (
-            $relativePath !== $sourceRepositoryRelativePath
+            !in_array($relativePath, array($sourceRepositoryRelativePath, $sourceItemRepositoryRelativePath), true)
             && containsForbiddenPattern($contents, 'wpdb->update(', true)
         ) {
             $failures[] = '$wpdb->update() is only allowed in '
                 . $sourceRepositoryRelativePath
+                . ' or '
+                . $sourceItemRepositoryRelativePath
                 . '; found in '
                 . $relativePath;
         }
@@ -1263,8 +1280,12 @@ if ($sourceItemRepositoryContents === false) {
         $failures[] = 'SourceItemRepository must not call $wpdb->delete().';
     }
 
-    if (containsForbiddenPattern($sourceItemRepositoryContents, 'wpdb->update(', true)) {
-        $failures[] = 'SourceItemRepository must not call $wpdb->update().';
+    if (strpos($sourceItemRepositoryContents, 'markUnchanged') === false) {
+        $failures[] = 'SourceItemRepository must provide markUnchanged for lifecycle.';
+    }
+
+    if (strpos($sourceItemRepositoryContents, 'applyContentUpdate') === false) {
+        $failures[] = 'SourceItemRepository must provide applyContentUpdate for lifecycle.';
     }
 }
 
@@ -2086,8 +2107,8 @@ if (
     $failures[] = 'Connectivity Audit submenu must be registered after Bulk Sources and before Manual Intake.';
 }
 
-if (count($approvedFiles) !== 89) {
-    $failures[] = 'Approved file inventory must contain exactly 89 files.';
+if (count($approvedFiles) !== 99) {
+    $failures[] = 'Approved file inventory must contain exactly 99 files.';
 }
 
 $phpFilesToLint = array();
@@ -2264,6 +2285,10 @@ $cip002FoundationFiles = array(
         'final class AcquisitionModule',
         "return 'acquisition'",
     ),
+    'src/Modules/AnnouncementModule.php' => array(
+        'final class AnnouncementModule',
+        "return 'announcement'",
+    ),
     'src/Registry/CapabilityRegistry.php' => array(
         'final class CapabilityRegistry',
         'SOURCE_REGISTRY',
@@ -2277,7 +2302,7 @@ $cip002FoundationFiles = array(
     ),
     'src/Registry/VersionRegistry.php' => array(
         'final class VersionRegistry',
-        'cip-005-production-orchestrator',
+        'editorial-spine-phase1-announcement-lifecycle',
     ),
     'src/Platform/PlatformDiagnostics.php' => array(
         'final class PlatformDiagnostics',
@@ -2337,6 +2362,7 @@ if ($pluginBootstrapContents === false) {
         'CorePlatformModule',
         'SourceRegistryModule',
         'AcquisitionModule',
+        'AnnouncementModule',
     );
 
     foreach ($requiredPluginSnippets as $snippet) {

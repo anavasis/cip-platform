@@ -6,7 +6,7 @@ defined('ABSPATH') || exit;
 
 final class VersionRegistry
 {
-    public const PLATFORM_PHASE = 'cip-005-production-orchestrator';
+    public const PLATFORM_PHASE = 'editorial-spine-phase1-announcement-lifecycle';
 
     /** @var array<string, string> */
     private $versions = array();

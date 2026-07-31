@@ -17,6 +17,10 @@ final class PlatformDiagnostics
     private $featureFlags;
     private $versionRegistry;
     private $acquisitionDiagnostics;
+    /** @var object|null */
+    private $announcementLifecycleService;
+    /** @var object|null */
+    private $editorialIngestionService;
 
     public function __construct(
         ModuleRegistry $moduleRegistry,
@@ -30,6 +34,21 @@ final class PlatformDiagnostics
         $this->featureFlags = $featureFlags;
         $this->versionRegistry = $versionRegistry;
         $this->acquisitionDiagnostics = $acquisitionDiagnostics;
+        $this->announcementLifecycleService = null;
+        $this->editorialIngestionService = null;
+    }
+
+    /**
+     * Bound by AnnouncementModule::boot() to avoid CorePlatform ↔ Announcement coupling.
+     *
+     * @param object $lifecycleService
+     * @param object $ingestionService
+     * @return void
+     */
+    public function bindAnnouncementSpine($lifecycleService, $ingestionService)
+    {
+        $this->announcementLifecycleService = $lifecycleService;
+        $this->editorialIngestionService = $ingestionService;
     }
 
     /**
@@ -97,6 +116,7 @@ final class PlatformDiagnostics
             'capabilities' => $capabilities,
             'feature_flags' => $flags,
             'acquisition_engine' => $acquisitionEngineStatus,
+            'announcement_lifecycle' => $this->announcementLifecycleStatus(),
             'confirmations' => array(
                 'collector_routing' => $collectorRouting,
                 'evidence_store' => 'In-Memory',
@@ -104,6 +124,7 @@ final class PlatformDiagnostics
                 'production_orchestrator' => $this->productionOrchestratorConfirmation(
                     $acquisitionEngineStatus
                 ),
+                'announcement_lifecycle' => $this->announcementLifecycleConfirmation(),
                 'acquisition' => $this->capabilityRegistry->isEnabled(CapabilityRegistry::ACQUISITION)
                     ? 'Active'
                     : 'Inactive',
@@ -118,6 +139,43 @@ final class PlatformDiagnostics
                     : 'Inactive',
             ),
         );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function announcementLifecycleStatus()
+    {
+        if (
+            $this->announcementLifecycleService !== null
+            && method_exists($this->announcementLifecycleService, 'diagnosticsStatus')
+        ) {
+            $status = $this->announcementLifecycleService->diagnosticsStatus();
+
+            if (is_array($status)) {
+                return $status;
+            }
+        }
+
+        return array(
+            'status' => 'not_bound',
+            'store' => 'smce_source_items',
+            'last_batch' => null,
+        );
+    }
+
+    /**
+     * @return string
+     */
+    private function announcementLifecycleConfirmation()
+    {
+        $status = $this->announcementLifecycleStatus();
+
+        if (isset($status['status']) && $status['status'] === 'ready') {
+            return 'Ready';
+        }
+
+        return 'Not ready';
     }
 
     /**
