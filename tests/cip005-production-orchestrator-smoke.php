@@ -216,7 +216,7 @@ $platformDiagnostics = $container->get(PlatformDiagnostics::class);
 $diagnostics = $platformDiagnostics->collect();
 
 assertSameValue(
-    'editorial-spine-phase1-announcement-lifecycle',
+    'editorial-workspace-phase2',
     $diagnostics['versions']['platform_phase'],
     'PlatformDiagnostics phase label must match CIP-005 label'
 );
@@ -233,7 +233,7 @@ assertSameValue(
 
 $versionRegistry = $container->get(VersionRegistry::class);
 assertSameValue(
-    'editorial-spine-phase1-announcement-lifecycle',
+    'editorial-workspace-phase2',
     $versionRegistry->get('platform_phase'),
     'VersionRegistry platform phase must match CIP-005 label'
 );

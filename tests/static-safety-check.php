@@ -146,6 +146,14 @@ $approvedFiles = array(
     'tests/cip003e-evidence-diagnostics-smoke.php',
     'tests/cip004-acquisition-capability-smoke.php',
     'tests/cip005-production-orchestrator-smoke.php',
+    'src/Admin/Pages/EditorialWorkspacePage.php',
+    'src/Admin/Pages/EditorialAnnouncementsPage.php',
+    'src/Admin/Pages/EditorialQueuePage.php',
+    'views/admin/editorial-workspace.php',
+    'views/admin/editorial-announcements.php',
+    'views/admin/editorial-queue.php',
+    'src/Announcement/EditorialWorkspaceQueryService.php',
+    'tests/editorial-workspace-phase2-smoke.php',
     'tests/editorial-spine-phase1-smoke.php',
     '.github/architecture-guard/policy.txt',
     '.github/architecture-guard/check.php',
@@ -729,6 +737,7 @@ foreach ($iterator as $item) {
                     || $relativePath === 'tests/cip004-acquisition-capability-smoke.php'
                     || $relativePath === 'tests/cip005-production-orchestrator-smoke.php'
                     || $relativePath === 'tests/editorial-spine-phase1-smoke.php'
+                    || $relativePath === 'tests/editorial-workspace-phase2-smoke.php'
                 )
             ) {
                 continue;
@@ -2107,8 +2116,27 @@ if (
     $failures[] = 'Connectivity Audit submenu must be registered after Bulk Sources and before Manual Intake.';
 }
 
-if (count($approvedFiles) !== 99) {
-    $failures[] = 'Approved file inventory must contain exactly 99 files.';
+if (
+    $menuContents === false
+    || strpos($menuContents, "'smce-editorial'") === false
+    || strpos($menuContents, "'smce-editorial-announcements'") === false
+    || strpos($menuContents, "'smce-editorial-queue'") === false
+) {
+    $failures[] = 'Editorial Workspace submenu pages are missing from Menu registration.';
+} elseif (
+    strpos($menuContents, "'smce-diagnostics'") === false
+    || strpos($menuContents, "'smce-editorial'")
+        < strpos($menuContents, "'smce-diagnostics'")
+    || strpos($menuContents, "'smce-editorial-announcements'")
+        < strpos($menuContents, "'smce-editorial'")
+    || strpos($menuContents, "'smce-editorial-queue'")
+        < strpos($menuContents, "'smce-editorial-announcements'")
+) {
+    $failures[] = 'Editorial Workspace submenus must be registered after Diagnostics in workspace order.';
+}
+
+if (count($approvedFiles) !== 107) {
+    $failures[] = 'Approved file inventory must contain exactly 107 files.';
 }
 
 $phpFilesToLint = array();
@@ -2302,7 +2330,7 @@ $cip002FoundationFiles = array(
     ),
     'src/Registry/VersionRegistry.php' => array(
         'final class VersionRegistry',
-        'editorial-spine-phase1-announcement-lifecycle',
+        'editorial-workspace-phase2',
     ),
     'src/Platform/PlatformDiagnostics.php' => array(
         'final class PlatformDiagnostics',

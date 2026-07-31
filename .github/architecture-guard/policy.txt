@@ -69,6 +69,7 @@ tests/cip003e-evidence-diagnostics-smoke.php
 tests/cip004-acquisition-capability-smoke.php
 tests/cip005-production-orchestrator-smoke.php
 tests/editorial-spine-phase1-smoke.php
+tests/editorial-workspace-phase2-smoke.php
 src/Acquisition/ProductionAcquisitionOrchestrator.php
 src/Acquisition/AcquisitionRunResult.php
 src/Modules/AnnouncementModule.php
@@ -77,10 +78,19 @@ src/Announcement/AnnouncementIdentityService.php
 src/Announcement/AnnouncementItemExtractor.php
 src/Announcement/AnnouncementLifecycleService.php
 src/Announcement/EditorialIngestionService.php
+src/Announcement/EditorialWorkspaceQueryService.php
 src/Announcement/LifecycleBatchResult.php
 src/Announcement/LifecycleDecision.php
 src/Announcement/LifecycleOutcome.php
 src/Data/SourceItemRepository.php
+src/Data/SourceItemReadRepository.php
+src/Admin/Menu.php
+src/Admin/Pages/EditorialWorkspacePage.php
+src/Admin/Pages/EditorialAnnouncementsPage.php
+src/Admin/Pages/EditorialQueuePage.php
+views/admin/editorial-workspace.php
+views/admin/editorial-announcements.php
+views/admin/editorial-queue.php
 src/Core/FeatureFlags.php
 .github/architecture-guard/policy.txt
 .github/architecture-guard/check.php

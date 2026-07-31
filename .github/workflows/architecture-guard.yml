@@ -52,3 +52,6 @@ jobs:
 
       - name: Run Editorial Spine Phase 1 Smoke Test
         run: php tests/editorial-spine-phase1-smoke.php
+
+      - name: Run Editorial Workspace Phase 2 Smoke Test
+        run: php tests/editorial-workspace-phase2-smoke.php

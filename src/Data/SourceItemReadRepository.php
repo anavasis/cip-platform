@@ -73,6 +73,8 @@ final class SourceItemReadRepository
             'created' => 'i.created_at_utc',
             'title' => 'i.raw_title',
             'id' => 'i.id',
+            'last_seen' => 'i.last_seen_at_utc',
+            'updated' => 'i.updated_at_utc',
         );
         $sort = isset($criteria['sort']) ? $criteria['sort'] : 'published';
         if (!is_string($sort) || !isset($sortExpressions[$sort])) {
@@ -81,6 +83,11 @@ final class SourceItemReadRepository
 
         $direction = isset($criteria['direction']) ? $criteria['direction'] : 'desc';
         if (!is_string($direction) || !in_array($direction, array('asc', 'desc'), true)) {
+            return $this->pageFailureResult($page);
+        }
+
+        $status = array_key_exists('status', $criteria) ? $criteria['status'] : null;
+        if ($status !== null && $status !== 'new' && $status !== 'updated') {
             return $this->pageFailureResult($page);
         }
 
@@ -109,6 +116,14 @@ final class SourceItemReadRepository
             $values[] = $dateTo . ' 23:59:59';
         }
 
+        if ($status === 'new') {
+            $conditions[] = 'i.revision_no = %d';
+            $values[] = 1;
+        } elseif ($status === 'updated') {
+            $conditions[] = 'i.revision_no > %d';
+            $values[] = 1;
+        }
+
         $offset = ($page - 1) * self::PAGE_SIZE;
         $values[] = self::QUERY_LIMIT;
         $values[] = $offset;
@@ -124,7 +139,9 @@ final class SourceItemReadRepository
             . 'OCTET_LENGTH(i.raw_payload) AS raw_payload_bytes, '
             . 'i.revision_no, '
             . 'i.first_seen_at_utc, '
+            . 'i.last_seen_at_utc, '
             . 'i.created_at_utc, '
+            . 'i.updated_at_utc, '
             . 's.name AS source_name, '
             . 's.slug AS source_slug '
             . 'FROM ' . $this->sourceItemsTableName . ' i '
@@ -240,6 +257,112 @@ final class SourceItemReadRepository
             'sources' => array_slice($rows, 0, self::MAX_SOURCE_OPTIONS),
             'truncated' => $truncated,
         );
+    }
+
+    /**
+     * Durable editorial workspace summary counts over smce_source_items.
+     *
+     * @return array{
+     *   ok: bool,
+     *   total: int,
+     *   new_count: int,
+     *   updated_count: int,
+     *   last_ingestion_at_utc: string
+     * }
+     */
+    public function findEditorialSummary()
+    {
+        $total = $this->fetchCount('1 = 1', array());
+        $newCount = $this->fetchCount('revision_no = %d', array(1));
+        $updatedCount = $this->fetchCount('revision_no > %d', array(1));
+        $lastIngestion = $this->fetchMaxUpdatedAt();
+
+        if ($total === null || $newCount === null || $updatedCount === null || $lastIngestion === null) {
+            return array(
+                'ok' => false,
+                'total' => 0,
+                'new_count' => 0,
+                'updated_count' => 0,
+                'last_ingestion_at_utc' => '',
+            );
+        }
+
+        return array(
+            'ok' => true,
+            'total' => $total,
+            'new_count' => $newCount,
+            'updated_count' => $updatedCount,
+            'last_ingestion_at_utc' => $lastIngestion,
+        );
+    }
+
+    /**
+     * @param string $condition
+     * @param array<int, mixed> $values
+     * @return int|null
+     */
+    private function fetchCount($condition, array $values)
+    {
+        $sql = 'SELECT COUNT(*) FROM ' . $this->sourceItemsTableName . ' WHERE ' . $condition;
+
+        if ($values !== array()) {
+            $prepared = $this->wpdb->prepare($sql, $values);
+            if (!is_string($prepared)) {
+                return null;
+            }
+            $sql = $prepared;
+        }
+
+        $value = $this->fetchVarOrNull($sql);
+
+        if ($value === null) {
+            return null;
+        }
+
+        if ($value === '' || $value === false) {
+            return 0;
+        }
+
+        return (int) $value;
+    }
+
+    /**
+     * @return string|null
+     */
+    private function fetchMaxUpdatedAt()
+    {
+        $sql = 'SELECT MAX(updated_at_utc) FROM ' . $this->sourceItemsTableName;
+        $value = $this->fetchVarOrNull($sql);
+
+        if ($value === null) {
+            return null;
+        }
+
+        return is_string($value) ? $value : '';
+    }
+
+    /**
+     * @param string $preparedSql
+     * @return mixed|null
+     */
+    private function fetchVarOrNull($preparedSql)
+    {
+        $previousSuppression = $this->wpdb->suppress_errors(true);
+        $value = null;
+        $hasDbError = false;
+
+        try {
+            $value = $this->wpdb->get_var($preparedSql);
+            $hasDbError = $this->wpdb->last_error !== '';
+        } finally {
+            $this->wpdb->suppress_errors($previousSuppression);
+        }
+
+        if ($hasDbError) {
+            return null;
+        }
+
+        return $value;
     }
 
     private function fetchRowsOrNull($preparedSql)
