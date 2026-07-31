@@ -55,3 +55,6 @@ jobs:
 
       - name: Run Editorial Workspace Phase 2 Smoke Test
         run: php tests/editorial-workspace-phase2-smoke.php
+
+      - name: Run BUILD-001 Content Blueprint Smoke Test
+        run: php tests/build001-content-blueprint-smoke.php
