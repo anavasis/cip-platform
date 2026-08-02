@@ -10,6 +10,7 @@ use StudyMentor\ContentEngine\Modules\AcquisitionModule;
 use StudyMentor\ContentEngine\Modules\AnnouncementModule;
 use StudyMentor\ContentEngine\Modules\BlueprintModule;
 use StudyMentor\ContentEngine\Modules\CorePlatformModule;
+use StudyMentor\ContentEngine\Modules\PromptContextModule;
 use StudyMentor\ContentEngine\Modules\SourceRegistryModule;
 
 defined('ABSPATH') || exit;
@@ -32,6 +33,7 @@ final class Plugin
         $moduleRegistry->register(new AcquisitionModule());
         $moduleRegistry->register(new AnnouncementModule());
         $moduleRegistry->register(new BlueprintModule());
+        $moduleRegistry->register(new PromptContextModule());
 
         $moduleLoader = new ModuleLoader($moduleRegistry, $container);
         $moduleLoader->load();

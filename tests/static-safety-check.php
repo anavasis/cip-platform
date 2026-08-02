@@ -40,6 +40,7 @@ $approvedDirectories = array(
     'src/Feed',
     'src/Announcement',
     'src/Blueprint',
+    'src/PromptContext',
     'src/Modules',
     'src/Platform',
     'src/Registry',
@@ -108,6 +109,7 @@ $approvedFiles = array(
     'src/Modules/AcquisitionModule.php',
     'src/Modules/AnnouncementModule.php',
     'src/Modules/BlueprintModule.php',
+    'src/Modules/PromptContextModule.php',
     'src/Blueprint/ArticleType.php',
     'src/Blueprint/BlueprintStatus.php',
     'src/Blueprint/Tone.php',
@@ -125,6 +127,14 @@ $approvedFiles = array(
     'src/Blueprint/ContentBlueprintBuilder.php',
     'src/Blueprint/ContentBlueprintValidator.php',
     'tests/build001-content-blueprint-smoke.php',
+    'src/PromptContext/PromptContextStatus.php',
+    'src/PromptContext/AnnouncementFacts.php',
+    'src/PromptContext/BlueprintProjection.php',
+    'src/PromptContext/PromptContext.php',
+    'src/PromptContext/PromptContextBuilder.php',
+    'src/PromptContext/PromptContextValidator.php',
+    'src/PromptContext/PromptContextRepositoryInterface.php',
+    'tests/build002-prompt-context-smoke.php',
     'src/Announcement/AnnouncementCandidate.php',
     'src/Announcement/AnnouncementIdentityService.php',
     'src/Announcement/AnnouncementItemExtractor.php',
@@ -758,6 +768,7 @@ foreach ($iterator as $item) {
                     || $relativePath === 'tests/editorial-spine-phase1-smoke.php'
                     || $relativePath === 'tests/editorial-workspace-phase2-smoke.php'
                     || $relativePath === 'tests/build001-content-blueprint-smoke.php'
+                    || $relativePath === 'tests/build002-prompt-context-smoke.php'
                 )
             ) {
                 continue;
@@ -2155,8 +2166,8 @@ if (
     $failures[] = 'Editorial Workspace submenus must be registered after Diagnostics in workspace order.';
 }
 
-if (count($approvedFiles) !== 125) {
-    $failures[] = 'Approved file inventory must contain exactly 125 files.';
+if (count($approvedFiles) !== 134) {
+    $failures[] = 'Approved file inventory must contain exactly 134 files.';
 }
 
 $phpFilesToLint = array();
@@ -2341,6 +2352,10 @@ $cip002FoundationFiles = array(
         'final class BlueprintModule',
         "return 'blueprint'",
     ),
+    'src/Modules/PromptContextModule.php' => array(
+        'final class PromptContextModule',
+        "return 'prompt_context'",
+    ),
     'src/Registry/CapabilityRegistry.php' => array(
         'final class CapabilityRegistry',
         'SOURCE_REGISTRY',
@@ -2416,6 +2431,7 @@ if ($pluginBootstrapContents === false) {
         'AcquisitionModule',
         'AnnouncementModule',
         'BlueprintModule',
+        'PromptContextModule',
     );
 
     foreach ($requiredPluginSnippets as $snippet) {

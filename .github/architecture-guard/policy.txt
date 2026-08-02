@@ -109,6 +109,15 @@ src/Blueprint/ContentBlueprintRepositoryInterface.php
 src/Blueprint/ContentBlueprintBuilder.php
 src/Blueprint/ContentBlueprintValidator.php
 tests/build001-content-blueprint-smoke.php
+src/Modules/PromptContextModule.php
+src/PromptContext/PromptContextStatus.php
+src/PromptContext/AnnouncementFacts.php
+src/PromptContext/BlueprintProjection.php
+src/PromptContext/PromptContext.php
+src/PromptContext/PromptContextBuilder.php
+src/PromptContext/PromptContextValidator.php
+src/PromptContext/PromptContextRepositoryInterface.php
+tests/build002-prompt-context-smoke.php
 src/Core/FeatureFlags.php
 .github/architecture-guard/policy.txt
 .github/architecture-guard/check.php
