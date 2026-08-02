@@ -136,6 +136,15 @@ src/GenerationRequest/GenerationRequestBuilder.php
 src/GenerationRequest/GenerationRequestValidator.php
 src/GenerationRequest/GenerationRequestRepositoryInterface.php
 tests/build004-generation-request-smoke.php
+src/Modules/GenerationResultModule.php
+src/GenerationResult/GenerationResultStatus.php
+src/GenerationResult/ProviderExecutionReference.php
+src/GenerationResult/GeneratedArtifactReference.php
+src/GenerationResult/GenerationResult.php
+src/GenerationResult/GenerationResultBuilder.php
+src/GenerationResult/GenerationResultValidator.php
+src/GenerationResult/GenerationResultRepositoryInterface.php
+tests/build005-generation-result-smoke.php
 src/Core/FeatureFlags.php
 .github/architecture-guard/policy.txt
 .github/architecture-guard/check.php

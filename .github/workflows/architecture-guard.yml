@@ -67,3 +67,6 @@ jobs:
 
       - name: Run BUILD-004 Generation Request Smoke Test
         run: php tests/build004-generation-request-smoke.php
+
+      - name: Run BUILD-005 Generation Result Smoke Test
+        run: php tests/build005-generation-result-smoke.php
