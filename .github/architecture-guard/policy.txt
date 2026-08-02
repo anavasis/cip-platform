@@ -145,6 +145,15 @@ src/GenerationResult/GenerationResultBuilder.php
 src/GenerationResult/GenerationResultValidator.php
 src/GenerationResult/GenerationResultRepositoryInterface.php
 tests/build005-generation-result-smoke.php
+src/Modules/EditorialSliceModule.php
+src/Editorial/AnnouncementSnapshotMapper.php
+src/Generation/AiProviderInterface.php
+src/Generation/StubAiProvider.php
+src/Generation/GenerationOrchestrator.php
+src/Article/ArticlePreview.php
+src/Article/ArticlePreviewRepositoryInterface.php
+src/Article/InMemoryArticlePreviewRepository.php
+tests/editorial-slice-a-smoke.php
 src/Core/FeatureFlags.php
 .github/architecture-guard/policy.txt
 .github/architecture-guard/check.php

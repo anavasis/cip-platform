@@ -3,7 +3,9 @@
 namespace StudyMentor\ContentEngine\Admin\Pages;
 
 use StudyMentor\ContentEngine\Announcement\EditorialWorkspaceQueryService;
+use StudyMentor\ContentEngine\Article\ArticlePreviewRepositoryInterface;
 use StudyMentor\ContentEngine\Data\SourceItemReadRepository;
+use StudyMentor\ContentEngine\Generation\GenerationOrchestrator;
 use StudyMentor\ContentEngine\Platform\PlatformDiagnostics;
 
 defined('ABSPATH') || exit;
@@ -16,17 +18,23 @@ final class EditorialAnnouncementsPage
     private $repository;
     private $queryService;
     private $platformDiagnostics;
+    private $orchestrator;
+    private $previewRepository;
     private $viewPath;
 
     public function __construct(
         SourceItemReadRepository $repository,
         EditorialWorkspaceQueryService $queryService,
         PlatformDiagnostics $platformDiagnostics,
+        GenerationOrchestrator $orchestrator,
+        ArticlePreviewRepositoryInterface $previewRepository,
         $viewPath
     ) {
         $this->repository = $repository;
         $this->queryService = $queryService;
         $this->platformDiagnostics = $platformDiagnostics;
+        $this->orchestrator = $orchestrator;
+        $this->previewRepository = $previewRepository;
         $this->viewPath = $viewPath;
     }
 
@@ -42,23 +50,43 @@ final class EditorialAnnouncementsPage
             ? strtoupper($_SERVER['REQUEST_METHOD'])
             : '';
 
-        if ($requestMethod !== 'GET') {
-            $data['error_messages'][] = 'This read-only page accepts GET requests only.';
+        $isGeneratePost = $requestMethod === 'POST'
+            && isset($_POST['smce_editorial_generate']);
+
+        if ($requestMethod !== 'GET' && !$isGeneratePost) {
+            $data['error_messages'][] = 'This page accepts GET requests, or POST for Generate only.';
             require $this->viewPath;
             return;
         }
 
         $validationErrors = array();
-        $criteria = $this->parseListCriteria($validationErrors);
-        $hasItemId = array_key_exists('item_id', $_GET);
+        $criteria = $isGeneratePost
+            ? $this->parseListCriteriaFromPost($validationErrors)
+            : $this->parseListCriteria($validationErrors);
+        $hasItemId = $isGeneratePost
+            ? array_key_exists('item_id', $_POST)
+            : array_key_exists('item_id', $_GET);
         $itemId = null;
 
         if ($hasItemId) {
-            $itemIdValue = $this->readGetString('item_id', $validationErrors);
+            $itemIdValue = $isGeneratePost
+                ? $this->readPostString('item_id', $validationErrors)
+                : $this->readGetString('item_id', $validationErrors);
             $itemId = $this->parsePositiveInteger($itemIdValue);
 
             if ($itemId === null) {
                 $validationErrors[] = 'The announcement identifier is invalid.';
+            }
+        }
+
+        if ($isGeneratePost && $itemId !== null) {
+            $generateOutcome = $this->handleGeneratePost($itemId);
+            if ($generateOutcome['ok'] !== true) {
+                $validationErrors[] = $generateOutcome['message'];
+            } else {
+                $data['success_messages'][] = $generateOutcome['message'];
+                $data['article_preview'] = $generateOutcome['preview'];
+                $data['generation_result'] = $generateOutcome['meta'];
             }
         }
 
@@ -72,7 +100,7 @@ final class EditorialAnnouncementsPage
             admin_url('admin.php')
         );
 
-        if ($validationErrors !== array()) {
+        if ($validationErrors !== array() && !$hasItemId) {
             $data['error_messages'] = array_values(array_unique($validationErrors));
             $this->loadSourceOptions($data);
             require $this->viewPath;
@@ -81,6 +109,12 @@ final class EditorialAnnouncementsPage
 
         if ($hasItemId) {
             $data['mode'] = 'detail';
+            if ($itemId === null) {
+                $data['error_messages'] = array_values(array_unique($validationErrors));
+                require $this->viewPath;
+                return;
+            }
+
             $result = $this->repository->findById($itemId);
 
             if ($result['ok'] !== true) {
@@ -88,7 +122,21 @@ final class EditorialAnnouncementsPage
             } elseif ($result['found'] !== true || !is_array($result['item'])) {
                 $data['error_messages'][] = 'The requested announcement was not found.';
             } else {
+                if ($validationErrors !== array()) {
+                    $data['error_messages'] = array_merge(
+                        $data['error_messages'],
+                        array_values(array_unique($validationErrors))
+                    );
+                }
+
                 $data['detail_item'] = $this->buildDetailItem($result['item']);
+                $data['generate_form_url'] = $this->buildAdminUrl(
+                    array_merge(
+                        $this->buildListQueryArgs($criteria, true),
+                        array('item_id' => $itemId)
+                    )
+                );
+                $data['generate_nonce_action'] = 'smce_editorial_generate_' . $itemId;
                 $platform = $this->platformDiagnostics->collect();
                 $data['lifecycle_diagnostics'] = isset($platform['announcement_lifecycle'])
                     && is_array($platform['announcement_lifecycle'])
@@ -101,6 +149,17 @@ final class EditorialAnnouncementsPage
                 $data['spine_ready'] = isset($platform['confirmations']['announcement_lifecycle'])
                     ? (string) $platform['confirmations']['announcement_lifecycle']
                     : 'Not ready';
+                $data['last_generation'] = isset($platform['last_generation'])
+                    && is_array($platform['last_generation'])
+                    ? $platform['last_generation']
+                    : null;
+
+                if ($data['article_preview'] === null) {
+                    $existing = $this->previewRepository->findLatestForAnnouncement($itemId);
+                    if ($existing !== null) {
+                        $data['article_preview'] = $existing->toArray();
+                    }
+                }
             }
 
             require $this->viewPath;
@@ -148,6 +207,152 @@ final class EditorialAnnouncementsPage
         }
 
         require $this->viewPath;
+    }
+
+    /**
+     * @param int $itemId
+     * @return array{ok:bool,message:string,preview:?array<string,mixed>,meta:?array<string,mixed>}
+     */
+    private function handleGeneratePost($itemId)
+    {
+        if (!current_user_can('manage_options')) {
+            return array(
+                'ok' => false,
+                'message' => 'You do not have permission to generate a preview.',
+                'preview' => null,
+                'meta' => null,
+            );
+        }
+
+        if (
+            !isset($_POST['smce_editorial_generate_nonce'])
+            || !wp_verify_nonce(
+                sanitize_text_field(wp_unslash((string) $_POST['smce_editorial_generate_nonce'])),
+                'smce_editorial_generate_' . (int) $itemId
+            )
+        ) {
+            return array(
+                'ok' => false,
+                'message' => 'Security verification failed. Please try again.',
+                'preview' => null,
+                'meta' => null,
+            );
+        }
+
+        $loaded = $this->repository->findById((int) $itemId);
+        if ($loaded['ok'] !== true || $loaded['found'] !== true || !is_array($loaded['item'])) {
+            return array(
+                'ok' => false,
+                'message' => 'The announcement could not be loaded for generation.',
+                'preview' => null,
+                'meta' => null,
+            );
+        }
+
+        $outcome = $this->orchestrator->generateFromAnnouncement($loaded['item']);
+        if ($outcome['ok'] !== true) {
+            return array(
+                'ok' => false,
+                'message' => isset($outcome['error'])
+                    ? 'Generation failed: ' . (string) $outcome['error']
+                    : 'Generation failed.',
+                'preview' => null,
+                'meta' => array(
+                    'stages' => isset($outcome['stages']) ? $outcome['stages'] : array(),
+                ),
+            );
+        }
+
+        $preview = isset($outcome['preview']) ? $outcome['preview'] : null;
+        $previewArray = $preview !== null && method_exists($preview, 'toArray')
+            ? $preview->toArray()
+            : null;
+
+        return array(
+            'ok' => true,
+            'message' => 'Article preview generated with stub provider (not published).',
+            'preview' => $previewArray,
+            'meta' => array(
+                'blueprint_id' => isset($outcome['blueprint_id']) ? (string) $outcome['blueprint_id'] : '',
+                'request_id' => isset($outcome['request_id']) ? (string) $outcome['request_id'] : '',
+                'result_id' => isset($outcome['result_id']) ? (string) $outcome['result_id'] : '',
+                'preview_id' => isset($outcome['preview_id']) ? (string) $outcome['preview_id'] : '',
+                'stages' => isset($outcome['stages']) ? $outcome['stages'] : array(),
+            ),
+        );
+    }
+
+    /**
+     * @param array<int, string> $errors
+     * @return array<string, mixed>
+     */
+    private function parseListCriteriaFromPost(array &$errors)
+    {
+        $searchValue = $this->readPostString('s', $errors);
+        $search = '';
+        if ($searchValue !== null) {
+            $search = trim(sanitize_text_field($searchValue));
+        }
+
+        $sourceIdValue = $this->readPostString('source_id_filter', $errors);
+        $sourceId = null;
+        if ($sourceIdValue !== null && $sourceIdValue !== '') {
+            $sourceId = $this->parsePositiveInteger($sourceIdValue);
+        }
+
+        $statusValue = $this->readPostString('status', $errors);
+        $status = null;
+        if ($statusValue !== null && $statusValue !== '' && in_array($statusValue, array('new', 'updated'), true)) {
+            $status = $statusValue;
+        }
+
+        $dateFrom = $this->parseDate($this->readPostString('date_from', $errors));
+        $dateTo = $this->parseDate($this->readPostString('date_to', $errors));
+
+        $sortValue = $this->readPostString('sort', $errors);
+        $allowedSorts = array('published', 'created', 'title', 'id', 'last_seen', 'updated');
+        $sort = $sortValue === null || !in_array($sortValue, $allowedSorts, true)
+            ? 'updated'
+            : $sortValue;
+
+        $directionValue = $this->readPostString('direction', $errors);
+        $direction = $directionValue === null || !in_array($directionValue, array('asc', 'desc'), true)
+            ? 'desc'
+            : $directionValue;
+
+        $pageValue = $this->readPostString('paged', $errors);
+        $page = 1;
+        if ($pageValue !== null) {
+            $parsedPage = $this->parsePositiveInteger($pageValue);
+            if ($parsedPage !== null && $parsedPage <= self::MAX_PAGE) {
+                $page = $parsedPage;
+            }
+        }
+
+        return array(
+            'search' => $search,
+            'source_id' => $sourceId,
+            'status' => $status,
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+            'sort' => $sort,
+            'direction' => $direction,
+            'page' => $page,
+        );
+    }
+
+    private function readPostString($name, array &$errors)
+    {
+        if (!array_key_exists($name, $_POST)) {
+            return null;
+        }
+
+        if (!is_scalar($_POST[$name])) {
+            $errors[] = 'One or more values are invalid.';
+            return null;
+        }
+
+        return wp_unslash((string) $_POST[$name]);
     }
 
     private function parseListCriteria(array &$errors)
@@ -479,6 +684,7 @@ final class EditorialAnnouncementsPage
             'title' => 'Announcements',
             'mode' => 'list',
             'error_messages' => array(),
+            'success_messages' => array(),
             'filters' => array(
                 'search' => '',
                 'source_id' => '',
@@ -498,6 +704,11 @@ final class EditorialAnnouncementsPage
             'detail_item' => null,
             'lifecycle_diagnostics' => null,
             'spine_ready' => 'Not ready',
+            'generate_form_url' => '',
+            'generate_nonce_action' => '',
+            'article_preview' => null,
+            'generation_result' => null,
+            'last_generation' => null,
             'page' => 1,
             'has_previous' => false,
             'has_next' => false,

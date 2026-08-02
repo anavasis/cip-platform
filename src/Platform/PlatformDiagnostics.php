@@ -21,6 +21,10 @@ final class PlatformDiagnostics
     private $announcementLifecycleService;
     /** @var object|null */
     private $editorialIngestionService;
+    /** @var array<string, mixed>|null */
+    private $lastIngestion;
+    /** @var array<string, mixed>|null */
+    private $lastGeneration;
 
     public function __construct(
         ModuleRegistry $moduleRegistry,
@@ -36,6 +40,8 @@ final class PlatformDiagnostics
         $this->acquisitionDiagnostics = $acquisitionDiagnostics;
         $this->announcementLifecycleService = null;
         $this->editorialIngestionService = null;
+        $this->lastIngestion = null;
+        $this->lastGeneration = null;
     }
 
     /**
@@ -49,6 +55,28 @@ final class PlatformDiagnostics
     {
         $this->announcementLifecycleService = $lifecycleService;
         $this->editorialIngestionService = $ingestionService;
+    }
+
+    /**
+     * Editorial Slice A: last manual ingestion outcome (request-scoped / in-memory).
+     *
+     * @param array<string, mixed> $payload
+     * @return void
+     */
+    public function recordLastIngestion(array $payload)
+    {
+        $this->lastIngestion = $payload;
+    }
+
+    /**
+     * Editorial Slice A: last generate → BUILD → stub → preview outcome.
+     *
+     * @param array<string, mixed> $payload
+     * @return void
+     */
+    public function recordLastGeneration(array $payload)
+    {
+        $this->lastGeneration = $payload;
     }
 
     /**
@@ -117,6 +145,8 @@ final class PlatformDiagnostics
             'feature_flags' => $flags,
             'acquisition_engine' => $acquisitionEngineStatus,
             'announcement_lifecycle' => $this->announcementLifecycleStatus(),
+            'last_ingestion' => $this->lastIngestion,
+            'last_generation' => $this->lastGeneration,
             'confirmations' => array(
                 'collector_routing' => $collectorRouting,
                 'evidence_store' => 'In-Memory',

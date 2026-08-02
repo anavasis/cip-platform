@@ -16,7 +16,9 @@ use StudyMentor\ContentEngine\Admin\SourceActionHandler;
 use StudyMentor\ContentEngine\Admin\SourceCatalogActionHandler;
 use StudyMentor\ContentEngine\Admin\SourceCheckService;
 use StudyMentor\ContentEngine\Admin\SourceItemActionHandler;
+use StudyMentor\ContentEngine\Announcement\EditorialIngestionService;
 use StudyMentor\ContentEngine\Announcement\EditorialWorkspaceQueryService;
+use StudyMentor\ContentEngine\Article\ArticlePreviewRepositoryInterface;
 use StudyMentor\ContentEngine\Contracts\ModuleInterface;
 use StudyMentor\ContentEngine\Core\FeatureFlags;
 use StudyMentor\ContentEngine\Core\ServiceContainer;
@@ -28,6 +30,7 @@ use StudyMentor\ContentEngine\Data\SourceRegistryService;
 use StudyMentor\ContentEngine\Data\SourceRepository;
 use StudyMentor\ContentEngine\Feed\AsepAnnouncementsHtmlParser;
 use StudyMentor\ContentEngine\Feed\FeedPreviewParser;
+use StudyMentor\ContentEngine\Generation\GenerationOrchestrator;
 use StudyMentor\ContentEngine\Http\SafeFeedFetcher;
 use StudyMentor\ContentEngine\Http\SafeUrlGuard;
 use StudyMentor\ContentEngine\Platform\PlatformDiagnostics;
@@ -256,6 +259,8 @@ final class SourceRegistryModule implements ModuleInterface
                 static function (ServiceContainer $c) {
                     return new EditorialWorkspacePage(
                         $c->get(SourceItemReadRepository::class),
+                        $c->get(SourceRepository::class),
+                        $c->get(EditorialIngestionService::class),
                         $c->get(PlatformDiagnostics::class),
                         SMCE_PLUGIN_DIR . 'views/admin/editorial-workspace.php'
                     );
@@ -271,6 +276,8 @@ final class SourceRegistryModule implements ModuleInterface
                         $c->get(SourceItemReadRepository::class),
                         $c->get(EditorialWorkspaceQueryService::class),
                         $c->get(PlatformDiagnostics::class),
+                        $c->get(GenerationOrchestrator::class),
+                        $c->get(ArticlePreviewRepositoryInterface::class),
                         SMCE_PLUGIN_DIR . 'views/admin/editorial-announcements.php'
                     );
                 }

@@ -17,6 +17,14 @@ defined('ABSPATH') || exit;
         </div>
     <?php endforeach; ?>
 
+    <?php if (isset($data['success_messages']) && is_array($data['success_messages'])) : ?>
+        <?php foreach ($data['success_messages'] as $successMessage) : ?>
+            <div class="notice notice-success">
+                <p><?php echo esc_html($successMessage); ?></p>
+            </div>
+        <?php endforeach; ?>
+    <?php endif; ?>
+
     <?php if ($data['mode'] === 'detail') : ?>
         <p>
             <a href="<?php echo esc_url($data['back_url']); ?>">
@@ -114,6 +122,74 @@ defined('ABSPATH') || exit;
                 <pre><?php echo esc_html($item['raw_payload']); ?></pre>
             <?php endif; ?>
 
+            <h2><?php echo esc_html('Generate Article Preview'); ?></h2>
+            <p>
+                <?php echo esc_html(
+                    'Runs the BUILD-001…005 pipeline with StubAiProvider. '
+                    . 'Produces an in-memory Article Preview only — no WordPress publishing.'
+                ); ?>
+            </p>
+            <form method="post" action="<?php echo esc_url($data['generate_form_url']); ?>">
+                <input type="hidden" name="smce_editorial_generate" value="1">
+                <input type="hidden" name="item_id" value="<?php echo esc_attr((string) $item['id']); ?>">
+                <?php
+                wp_nonce_field(
+                    $data['generate_nonce_action'],
+                    'smce_editorial_generate_nonce'
+                );
+                ?>
+                <p>
+                    <button type="submit" class="button button-primary">
+                        <?php echo esc_html('Generate'); ?>
+                    </button>
+                </p>
+            </form>
+
+            <?php if (isset($data['article_preview']) && is_array($data['article_preview'])) : ?>
+                <div class="smce-article-preview-panel">
+                    <h2><?php echo esc_html('Article Preview'); ?></h2>
+                    <table class="widefat striped">
+                        <tbody>
+                            <tr>
+                                <th scope="row"><?php echo esc_html('Preview ID'); ?></th>
+                                <td><code><?php echo esc_html(
+                                    isset($data['article_preview']['preview_id'])
+                                        ? (string) $data['article_preview']['preview_id']
+                                        : '—'
+                                ); ?></code></td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><?php echo esc_html('Result ID'); ?></th>
+                                <td><code><?php echo esc_html(
+                                    isset($data['article_preview']['result_id'])
+                                        ? (string) $data['article_preview']['result_id']
+                                        : '—'
+                                ); ?></code></td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><?php echo esc_html('Title'); ?></th>
+                                <td><?php echo esc_html(
+                                    isset($data['article_preview']['title'])
+                                        ? (string) $data['article_preview']['title']
+                                        : '—'
+                                ); ?></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <h3><?php echo esc_html('Body'); ?></h3>
+                    <pre class="smce-article-preview-body"><?php echo esc_html(
+                        isset($data['article_preview']['body'])
+                            ? (string) $data['article_preview']['body']
+                            : ''
+                    ); ?></pre>
+                </div>
+            <?php endif; ?>
+
+            <?php if (isset($data['generation_result']) && is_array($data['generation_result'])) : ?>
+                <h2><?php echo esc_html('Generation Meta'); ?></h2>
+                <pre><?php echo esc_html(wp_json_encode($data['generation_result'])); ?></pre>
+            <?php endif; ?>
+
             <h2><?php echo esc_html('Lifecycle Diagnostics'); ?></h2>
             <table class="widefat striped">
                 <tbody>
@@ -155,6 +231,16 @@ defined('ABSPATH') || exit;
                                 ?>
                             <?php else : ?>
                                 <?php echo esc_html('None in this request (ephemeral).'); ?>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><?php echo esc_html('last_generation'); ?></th>
+                        <td>
+                            <?php if (isset($data['last_generation']) && is_array($data['last_generation'])) : ?>
+                                <code><?php echo esc_html(wp_json_encode($data['last_generation'])); ?></code>
+                            <?php else : ?>
+                                <?php echo esc_html('None in this request.'); ?>
                             <?php endif; ?>
                         </td>
                     </tr>

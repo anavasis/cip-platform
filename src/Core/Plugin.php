@@ -10,6 +10,7 @@ use StudyMentor\ContentEngine\Modules\AcquisitionModule;
 use StudyMentor\ContentEngine\Modules\AnnouncementModule;
 use StudyMentor\ContentEngine\Modules\BlueprintModule;
 use StudyMentor\ContentEngine\Modules\CorePlatformModule;
+use StudyMentor\ContentEngine\Modules\EditorialSliceModule;
 use StudyMentor\ContentEngine\Modules\GenerationRequestModule;
 use StudyMentor\ContentEngine\Modules\GenerationResultModule;
 use StudyMentor\ContentEngine\Modules\PromptContextModule;
@@ -40,6 +41,7 @@ final class Plugin
         $moduleRegistry->register(new PromptPackageModule());
         $moduleRegistry->register(new GenerationRequestModule());
         $moduleRegistry->register(new GenerationResultModule());
+        $moduleRegistry->register(new EditorialSliceModule());
 
         $moduleLoader = new ModuleLoader($moduleRegistry, $container);
         $moduleLoader->load();
