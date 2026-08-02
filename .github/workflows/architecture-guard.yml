@@ -73,3 +73,6 @@ jobs:
 
       - name: Run Editorial Slice A Smoke Test
         run: php tests/editorial-slice-a-smoke.php
+
+      - name: Run Delivery Core Smoke Test
+        run: php tests/delivery-core-smoke.php

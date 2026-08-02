@@ -41,6 +41,7 @@ $approvedDirectories = array(
     'src/Announcement',
     'src/Article',
     'src/Blueprint',
+    'src/Delivery',
     'src/Editorial',
     'src/PromptContext',
     'src/PromptPackage',
@@ -121,6 +122,15 @@ $approvedFiles = array(
     'src/Modules/GenerationRequestModule.php',
     'src/Modules/GenerationResultModule.php',
     'src/Modules/EditorialSliceModule.php',
+    'src/Modules/DeliveryModule.php',
+    'src/Delivery/DeliveryState.php',
+    'src/Delivery/DeliveryBinding.php',
+    'src/Delivery/DeliveryConnectorInterface.php',
+    'src/Delivery/DeliveryConnectorRegistry.php',
+    'src/Delivery/DeliveryRegistry.php',
+    'src/Delivery/DeliveryPayloadBuilder.php',
+    'src/Delivery/DeliveryDiagnostics.php',
+    'src/Delivery/DeliveryEngine.php',
     'src/Editorial/AnnouncementSnapshotMapper.php',
     'src/Generation/AiProviderInterface.php',
     'src/Generation/StubAiProvider.php',
@@ -178,6 +188,7 @@ $approvedFiles = array(
     'src/GenerationResult/GenerationResultRepositoryInterface.php',
     'tests/build005-generation-result-smoke.php',
     'tests/editorial-slice-a-smoke.php',
+    'tests/delivery-core-smoke.php',
     'src/Announcement/AnnouncementCandidate.php',
     'src/Announcement/AnnouncementIdentityService.php',
     'src/Announcement/AnnouncementItemExtractor.php',
@@ -817,6 +828,7 @@ foreach ($iterator as $item) {
                     || $relativePath === 'tests/build004-generation-request-smoke.php'
                     || $relativePath === 'tests/build005-generation-result-smoke.php'
                     || $relativePath === 'tests/editorial-slice-a-smoke.php'
+                    || $relativePath === 'tests/delivery-core-smoke.php'
                 )
             ) {
                 continue;
@@ -2214,8 +2226,8 @@ if (
     $failures[] = 'Editorial Workspace submenus must be registered after Diagnostics in workspace order.';
 }
 
-if (count($approvedFiles) !== 171) {
-    $failures[] = 'Approved file inventory must contain exactly 171 files.';
+if (count($approvedFiles) !== 181) {
+    $failures[] = 'Approved file inventory must contain exactly 181 files.';
 }
 
 $phpFilesToLint = array();
@@ -2420,6 +2432,10 @@ $cip002FoundationFiles = array(
         'final class EditorialSliceModule',
         "return 'editorial_slice'",
     ),
+    'src/Modules/DeliveryModule.php' => array(
+        'final class DeliveryModule',
+        "return 'delivery'",
+    ),
     'src/Registry/CapabilityRegistry.php' => array(
         'final class CapabilityRegistry',
         'SOURCE_REGISTRY',
@@ -2500,6 +2516,7 @@ if ($pluginBootstrapContents === false) {
         'GenerationRequestModule',
         'GenerationResultModule',
         'EditorialSliceModule',
+        'DeliveryModule',
     );
 
     foreach ($requiredPluginSnippets as $snippet) {

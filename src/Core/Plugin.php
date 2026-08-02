@@ -10,6 +10,7 @@ use StudyMentor\ContentEngine\Modules\AcquisitionModule;
 use StudyMentor\ContentEngine\Modules\AnnouncementModule;
 use StudyMentor\ContentEngine\Modules\BlueprintModule;
 use StudyMentor\ContentEngine\Modules\CorePlatformModule;
+use StudyMentor\ContentEngine\Modules\DeliveryModule;
 use StudyMentor\ContentEngine\Modules\EditorialSliceModule;
 use StudyMentor\ContentEngine\Modules\GenerationRequestModule;
 use StudyMentor\ContentEngine\Modules\GenerationResultModule;
@@ -42,6 +43,7 @@ final class Plugin
         $moduleRegistry->register(new GenerationRequestModule());
         $moduleRegistry->register(new GenerationResultModule());
         $moduleRegistry->register(new EditorialSliceModule());
+        $moduleRegistry->register(new DeliveryModule());
 
         $moduleLoader = new ModuleLoader($moduleRegistry, $container);
         $moduleLoader->load();
