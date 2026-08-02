@@ -10,20 +10,24 @@ use StudyMentor\ContentEngine\Editorial\AnnouncementSnapshotMapper;
 use StudyMentor\ContentEngine\GenerationRequest\GenerationModelReference;
 use StudyMentor\ContentEngine\GenerationRequest\GenerationParameters;
 use StudyMentor\ContentEngine\GenerationRequest\GenerationRequestBuilder;
+use StudyMentor\ContentEngine\GenerationRequest\GenerationRequestValidator;
 use StudyMentor\ContentEngine\GenerationResult\GeneratedArtifactReference;
 use StudyMentor\ContentEngine\GenerationResult\GenerationResultBuilder;
 use StudyMentor\ContentEngine\GenerationResult\GenerationResultStatus;
+use StudyMentor\ContentEngine\GenerationResult\GenerationResultValidator;
 use StudyMentor\ContentEngine\GenerationResult\ProviderExecutionReference;
 use StudyMentor\ContentEngine\Platform\PlatformDiagnostics;
 use StudyMentor\ContentEngine\PromptContext\PromptContextBuilder;
+use StudyMentor\ContentEngine\PromptContext\PromptContextValidator;
 use StudyMentor\ContentEngine\PromptPackage\PromptPackageBuilder;
+use StudyMentor\ContentEngine\PromptPackage\PromptPackageValidator;
 use StudyMentor\ContentEngine\PromptPackage\PromptTemplateReference;
 
 defined('ABSPATH') || exit;
 
 /**
- * Editorial Slice A orchestrator: Announcement → BUILD-001…005 → stub → preview.
- * No publishing, workflow, compliance, or real AI providers.
+ * Editorial Slice A orchestrator: Announcement → BUILD-001…005 → provider → preview.
+ * No publishing, workflow, compliance, or concrete AI vendor bindings.
  */
 final class GenerationOrchestrator
 {
@@ -36,10 +40,14 @@ final class GenerationOrchestrator
     private $blueprintBuilder;
     private $blueprintValidator;
     private $promptContextBuilder;
+    private $promptContextValidator;
     private $promptPackageBuilder;
+    private $promptPackageValidator;
     private $generationRequestBuilder;
+    private $generationRequestValidator;
     private $aiProvider;
     private $generationResultBuilder;
+    private $generationResultValidator;
     private $previewRepository;
     private $platformDiagnostics;
 
@@ -48,10 +56,14 @@ final class GenerationOrchestrator
         ContentBlueprintBuilder $blueprintBuilder,
         ContentBlueprintValidator $blueprintValidator,
         PromptContextBuilder $promptContextBuilder,
+        PromptContextValidator $promptContextValidator,
         PromptPackageBuilder $promptPackageBuilder,
+        PromptPackageValidator $promptPackageValidator,
         GenerationRequestBuilder $generationRequestBuilder,
+        GenerationRequestValidator $generationRequestValidator,
         AiProviderInterface $aiProvider,
         GenerationResultBuilder $generationResultBuilder,
+        GenerationResultValidator $generationResultValidator,
         ArticlePreviewRepositoryInterface $previewRepository,
         PlatformDiagnostics $platformDiagnostics
     ) {
@@ -59,10 +71,14 @@ final class GenerationOrchestrator
         $this->blueprintBuilder = $blueprintBuilder;
         $this->blueprintValidator = $blueprintValidator;
         $this->promptContextBuilder = $promptContextBuilder;
+        $this->promptContextValidator = $promptContextValidator;
         $this->promptPackageBuilder = $promptPackageBuilder;
+        $this->promptPackageValidator = $promptPackageValidator;
         $this->generationRequestBuilder = $generationRequestBuilder;
+        $this->generationRequestValidator = $generationRequestValidator;
         $this->aiProvider = $aiProvider;
         $this->generationResultBuilder = $generationResultBuilder;
+        $this->generationResultValidator = $generationResultValidator;
         $this->previewRepository = $previewRepository;
         $this->platformDiagnostics = $platformDiagnostics;
     }
@@ -78,7 +94,7 @@ final class GenerationOrchestrator
             'build_002' => false,
             'build_003' => false,
             'build_004' => false,
-            'stub_provider' => false,
+            'provider' => false,
             'build_005' => false,
             'preview_stored' => false,
         );
@@ -94,17 +110,19 @@ final class GenerationOrchestrator
             $snapshot = $this->mapper->fromSourceItem($announcementItem);
 
             $blueprint = $this->blueprintBuilder->buildFromAnnouncement($snapshot);
-            $blueprintCheck = $this->blueprintValidator->validate($blueprint);
-            if ($blueprintCheck['valid'] !== true) {
-                throw new \InvalidArgumentException(
-                    'blueprint_invalid:' . implode(',', $blueprintCheck['errors'])
-                );
-            }
+            $this->assertValid(
+                $this->blueprintValidator->validate($blueprint),
+                'blueprint_invalid'
+            );
             $stages['build_001'] = true;
 
             $context = $this->promptContextBuilder->buildFromAnnouncementAndBlueprint(
                 $snapshot,
                 $blueprint
+            );
+            $this->assertValid(
+                $this->promptContextValidator->validate($context),
+                'prompt_context_invalid'
             );
             $stages['build_002'] = true;
 
@@ -117,6 +135,10 @@ final class GenerationOrchestrator
                 $context,
                 $blueprintReference,
                 $templateReference
+            );
+            $this->assertValid(
+                $this->promptPackageValidator->validate($package),
+                'prompt_package_invalid'
             );
             $stages['build_003'] = true;
 
@@ -135,44 +157,83 @@ final class GenerationOrchestrator
                 $modelReference,
                 $parameters
             );
+            $this->assertValid(
+                $this->generationRequestValidator->validate($request),
+                'generation_request_invalid'
+            );
             $stages['build_004'] = true;
 
             $providerOut = $this->aiProvider->generate($request);
-            $stages['stub_provider'] = true;
+            if (!is_array($providerOut)) {
+                throw new \InvalidArgumentException('provider_response_invalid');
+            }
+            $stages['provider'] = true;
 
             $now = $this->utcNow();
+            $providerCode = isset($providerOut['provider_code'])
+                ? trim((string) $providerOut['provider_code'])
+                : '';
+            if ($providerCode === '') {
+                $providerCode = 'unknown';
+            }
+
             $execution = new ProviderExecutionReference(array(
                 'execution_id' => isset($providerOut['execution_id'])
                     ? (string) $providerOut['execution_id']
-                    : 'stub_exec_missing',
-                'provider_code' => isset($providerOut['provider_code'])
-                    ? (string) $providerOut['provider_code']
-                    : StubAiProvider::PROVIDER_CODE,
+                    : 'exec_missing',
+                'provider_code' => $providerCode,
                 'started_at_utc' => $now,
                 'completed_at_utc' => $now,
             ));
 
-            $artifact = array(
-                'artifact_id' => isset($providerOut['artifact_id'])
-                    ? (string) $providerOut['artifact_id']
-                    : 'stub_art_missing',
-                'artifact_kind' => isset($providerOut['artifact_kind'])
-                    ? (string) $providerOut['artifact_kind']
-                    : GeneratedArtifactReference::KIND_CONTENT_CANDIDATE,
-                'content_hash' => isset($providerOut['content_hash'])
-                    ? (string) $providerOut['content_hash']
-                    : '',
-                'mime_type' => isset($providerOut['mime_type'])
-                    ? (string) $providerOut['mime_type']
-                    : 'text/plain',
-            );
-
+            $providerOk = isset($providerOut['ok']) && $providerOut['ok'] === true;
             $durationMs = isset($providerOut['duration_ms']) ? (int) $providerOut['duration_ms'] : 0;
-            $result = $this->generationResultBuilder->buildSuccessFromRequest(
-                $request,
-                $execution,
-                array($artifact),
-                array('duration_ms' => $durationMs)
+
+            if ($providerOk) {
+                $artifact = array(
+                    'artifact_id' => isset($providerOut['artifact_id'])
+                        ? (string) $providerOut['artifact_id']
+                        : '',
+                    'artifact_kind' => isset($providerOut['artifact_kind'])
+                        ? (string) $providerOut['artifact_kind']
+                        : GeneratedArtifactReference::KIND_CONTENT_CANDIDATE,
+                    'content_hash' => isset($providerOut['content_hash'])
+                        ? (string) $providerOut['content_hash']
+                        : '',
+                    'mime_type' => isset($providerOut['mime_type'])
+                        ? (string) $providerOut['mime_type']
+                        : 'text/plain',
+                );
+
+                $result = $this->generationResultBuilder->buildSuccessFromRequest(
+                    $request,
+                    $execution,
+                    array($artifact),
+                    array('duration_ms' => $durationMs)
+                );
+            } else {
+                $errorCode = isset($providerOut['error_code'])
+                    ? trim((string) $providerOut['error_code'])
+                    : '';
+                if ($errorCode === '') {
+                    $errorCode = 'provider_error';
+                }
+                $errorMessage = isset($providerOut['error_message'])
+                    ? trim((string) $providerOut['error_message'])
+                    : 'Provider reported failure.';
+
+                $result = $this->generationResultBuilder->buildErrorFromRequest(
+                    $request,
+                    $execution,
+                    $errorCode,
+                    $errorMessage,
+                    array('duration_ms' => $durationMs)
+                );
+            }
+
+            $this->assertValid(
+                $this->generationResultValidator->validate($result),
+                'generation_result_invalid'
             );
             $stages['build_005'] = true;
 
@@ -197,10 +258,11 @@ final class GenerationOrchestrator
                     'stages' => $stages,
                     'request_id' => $result->requestId(),
                     'result_id' => $result->resultId(),
+                    'result' => $result,
                 );
             }
 
-            $body = isset($providerOut['body']) ? (string) $providerOut['body'] : '';
+            $contentText = $this->providerNeutralContentText($providerOut);
             $title = isset($snapshot['raw_title']) && $snapshot['raw_title'] !== ''
                 ? (string) $snapshot['raw_title']
                 : 'Untitled';
@@ -218,7 +280,7 @@ final class GenerationOrchestrator
                 'result_id' => $result->resultId(),
                 'result_hash' => $result->resultHash(),
                 'title' => $title,
-                'body' => $body,
+                'body' => $contentText,
                 'created_at_utc' => $now,
             ));
 
@@ -262,6 +324,36 @@ final class GenerationOrchestrator
                 'error' => $e->getMessage(),
                 'stages' => $stages,
             );
+        }
+    }
+
+    /**
+     * Reads only AiProviderInterface contract content for preview assembly.
+     *
+     * @param array<string, mixed> $providerOut
+     * @return string
+     */
+    private function providerNeutralContentText(array $providerOut)
+    {
+        if (!isset($providerOut['content_text']) || !is_scalar($providerOut['content_text'])) {
+            throw new \InvalidArgumentException('provider_content_text_required');
+        }
+
+        return (string) $providerOut['content_text'];
+    }
+
+    /**
+     * @param array{valid?:bool,errors?:array<int,string>} $check
+     * @param string $prefix
+     * @return void
+     */
+    private function assertValid(array $check, $prefix)
+    {
+        if (!isset($check['valid']) || $check['valid'] !== true) {
+            $errors = isset($check['errors']) && is_array($check['errors'])
+                ? implode(',', $check['errors'])
+                : 'unknown';
+            throw new \InvalidArgumentException((string) $prefix . ':' . $errors);
         }
     }
 

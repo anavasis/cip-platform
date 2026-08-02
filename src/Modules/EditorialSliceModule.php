@@ -13,10 +13,14 @@ use StudyMentor\ContentEngine\Generation\AiProviderInterface;
 use StudyMentor\ContentEngine\Generation\GenerationOrchestrator;
 use StudyMentor\ContentEngine\Generation\StubAiProvider;
 use StudyMentor\ContentEngine\GenerationRequest\GenerationRequestBuilder;
+use StudyMentor\ContentEngine\GenerationRequest\GenerationRequestValidator;
 use StudyMentor\ContentEngine\GenerationResult\GenerationResultBuilder;
+use StudyMentor\ContentEngine\GenerationResult\GenerationResultValidator;
 use StudyMentor\ContentEngine\Platform\PlatformDiagnostics;
 use StudyMentor\ContentEngine\PromptContext\PromptContextBuilder;
+use StudyMentor\ContentEngine\PromptContext\PromptContextValidator;
 use StudyMentor\ContentEngine\PromptPackage\PromptPackageBuilder;
+use StudyMentor\ContentEngine\PromptPackage\PromptPackageValidator;
 
 defined('ABSPATH') || exit;
 
@@ -76,10 +80,14 @@ final class EditorialSliceModule implements ModuleInterface
                         $c->get(ContentBlueprintBuilder::class),
                         $c->get(ContentBlueprintValidator::class),
                         $c->get(PromptContextBuilder::class),
+                        $c->get(PromptContextValidator::class),
                         $c->get(PromptPackageBuilder::class),
+                        $c->get(PromptPackageValidator::class),
                         $c->get(GenerationRequestBuilder::class),
+                        $c->get(GenerationRequestValidator::class),
                         $c->get(AiProviderInterface::class),
                         $c->get(GenerationResultBuilder::class),
+                        $c->get(GenerationResultValidator::class),
                         $c->get(ArticlePreviewRepositoryInterface::class),
                         $c->get(PlatformDiagnostics::class)
                     );

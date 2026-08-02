@@ -172,20 +172,6 @@ final class EditorialWorkspacePage
         }
 
         $result = $this->ingestionService->ingestFromSource($sourceId);
-        $payload = array(
-            'at' => function_exists('current_time')
-                ? (string) current_time('mysql', true)
-                : gmdate('Y-m-d H:i:s'),
-            'ok' => $result->success() === true,
-            'source_id' => $result->sourceId(),
-            'error_code' => $result->errorCode(),
-            'candidates' => $result->candidates(),
-            'new_count' => $result->newCount(),
-            'updated_count' => $result->updatedCount(),
-            'unchanged_count' => $result->unchangedCount(),
-            'duplicate_count' => $result->duplicateCount(),
-        );
-        $this->platformDiagnostics->recordLastIngestion($payload);
 
         if ($result->success() !== true) {
             $code = $result->errorCode() !== '' ? $result->errorCode() : 'ingestion_failed';

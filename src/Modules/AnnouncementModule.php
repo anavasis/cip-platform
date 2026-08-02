@@ -62,7 +62,8 @@ final class AnnouncementModule implements ModuleInterface
                         $c->get(AnnouncementLifecycleService::class),
                         $c->get(CapabilityRegistry::class),
                         $c->get(CollectorRegistry::class),
-                        $c->get(ParserRegistry::class)
+                        $c->get(ParserRegistry::class),
+                        $c->get(PlatformDiagnostics::class)
                     );
                 }
             );

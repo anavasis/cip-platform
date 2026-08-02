@@ -4,6 +4,7 @@ namespace StudyMentor\ContentEngine\Announcement;
 
 use StudyMentor\ContentEngine\Acquisition\SourceAcquisitionService;
 use StudyMentor\ContentEngine\Collectors\CollectorRegistry;
+use StudyMentor\ContentEngine\Platform\PlatformDiagnostics;
 use StudyMentor\ContentEngine\Registry\CapabilityRegistry;
 use StudyMentor\ContentEngine\Registry\ParserRegistry;
 
@@ -21,6 +22,7 @@ final class EditorialIngestionService
     private $capabilityRegistry;
     private $collectorRegistry;
     private $parserRegistry;
+    private $platformDiagnostics;
     /** @var LifecycleBatchResult|null */
     private $lastResult;
 
@@ -30,7 +32,8 @@ final class EditorialIngestionService
         AnnouncementLifecycleService $lifecycleService,
         CapabilityRegistry $capabilityRegistry,
         CollectorRegistry $collectorRegistry,
-        ParserRegistry $parserRegistry
+        ParserRegistry $parserRegistry,
+        PlatformDiagnostics $platformDiagnostics
     ) {
         $this->sourceAcquisitionService = $sourceAcquisitionService;
         $this->extractor = $extractor;
@@ -38,6 +41,7 @@ final class EditorialIngestionService
         $this->capabilityRegistry = $capabilityRegistry;
         $this->collectorRegistry = $collectorRegistry;
         $this->parserRegistry = $parserRegistry;
+        $this->platformDiagnostics = $platformDiagnostics;
         $this->lastResult = null;
     }
 
@@ -92,6 +96,7 @@ final class EditorialIngestionService
 
         $result = $this->lifecycleService->apply($candidates);
         $this->lastResult = $result;
+        $this->recordIngestionDiagnostics($result);
 
         return $result;
     }
@@ -106,6 +111,7 @@ final class EditorialIngestionService
     {
         $result = $this->lifecycleService->apply($candidates);
         $this->lastResult = $result;
+        $this->recordIngestionDiagnostics($result);
 
         return $result;
     }
@@ -183,7 +189,29 @@ final class EditorialIngestionService
             'decisions' => array(),
         ));
         $this->lastResult = $result;
+        $this->recordIngestionDiagnostics($result);
 
         return $result;
+    }
+
+    /**
+     * @param LifecycleBatchResult $result
+     * @return void
+     */
+    private function recordIngestionDiagnostics(LifecycleBatchResult $result)
+    {
+        $this->platformDiagnostics->recordLastIngestion(array(
+            'at' => function_exists('current_time')
+                ? (string) current_time('mysql', true)
+                : gmdate('Y-m-d H:i:s'),
+            'ok' => $result->success() === true,
+            'source_id' => $result->sourceId(),
+            'error_code' => $result->errorCode(),
+            'candidates' => $result->candidates(),
+            'new_count' => $result->newCount(),
+            'updated_count' => $result->updatedCount(),
+            'unchanged_count' => $result->unchangedCount(),
+            'duplicate_count' => $result->duplicateCount(),
+        ));
     }
 }

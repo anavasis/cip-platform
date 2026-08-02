@@ -208,6 +208,7 @@ use StudyMentor\ContentEngine\Generation\GenerationOrchestrator;
 use StudyMentor\ContentEngine\Generation\StubAiProvider;
 use StudyMentor\ContentEngine\GenerationRequest\GenerationModelReference;
 use StudyMentor\ContentEngine\GenerationRequest\GenerationParameters;
+use StudyMentor\ContentEngine\GenerationRequest\GenerationRequest;
 use StudyMentor\ContentEngine\GenerationRequest\GenerationRequestBuilder;
 use StudyMentor\ContentEngine\GenerationResult\GenerationResult;
 use StudyMentor\ContentEngine\GenerationResult\GenerationResultStatus;
@@ -322,16 +323,12 @@ $ingestResult = $ingestion->ingestCandidates(array(
 assertTrue($ingestResult->success() === true, 'Manual ingestion via candidates succeeds');
 assertSameValue(1, $ingestResult->newCount(), 'Ingestion creates NEW announcement');
 
-$platformDiagnostics->recordLastIngestion(array(
-    'at' => current_time('mysql', true),
-    'ok' => true,
-    'source_id' => 21,
-    'new_count' => $ingestResult->newCount(),
-    'updated_count' => $ingestResult->updatedCount(),
-    'unchanged_count' => $ingestResult->unchangedCount(),
-    'duplicate_count' => $ingestResult->duplicateCount(),
-    'candidates' => $ingestResult->candidates(),
-));
+$diagnosticsAfterIngest = $platformDiagnostics->collect();
+assertTrue(
+    isset($diagnosticsAfterIngest['last_ingestion']) && is_array($diagnosticsAfterIngest['last_ingestion']),
+    'Ingestion service records last_ingestion diagnostics'
+);
+assertTrue($diagnosticsAfterIngest['last_ingestion']['ok'] === true, 'last_ingestion ok from service');
 
 // --- Snapshot mapper ---
 
@@ -366,10 +363,15 @@ assertTrue($outcome['stages']['build_001'] === true, 'BUILD-001 executed');
 assertTrue($outcome['stages']['build_002'] === true, 'BUILD-002 executed');
 assertTrue($outcome['stages']['build_003'] === true, 'BUILD-003 executed');
 assertTrue($outcome['stages']['build_004'] === true, 'BUILD-004 executed');
-assertTrue($outcome['stages']['stub_provider'] === true, 'Stub provider executed');
+assertTrue($outcome['stages']['provider'] === true, 'Provider executed');
 assertTrue($outcome['stages']['build_005'] === true, 'BUILD-005 executed');
 assertTrue($outcome['stages']['preview_stored'] === true, 'Preview stored');
 
+$orchestratorSource = file_get_contents($pluginDirectory . '/src/Generation/GenerationOrchestrator.php');
+assertTrue(
+    strpos($orchestratorSource, 'StubAiProvider') === false,
+    'GenerationOrchestrator must not reference StubAiProvider'
+);
 assertTrue(isset($outcome['result']) && $outcome['result'] instanceof GenerationResult, 'GenerationResult produced');
 assertSameValue(
     GenerationResultStatus::SUCCESS,
@@ -502,8 +504,64 @@ $fixedRequest = (new GenerationRequestBuilder())->buildFromPackage(
 );
 $providerOutA = $provider->generate($fixedRequest);
 $providerOutB = $provider->generate($fixedRequest);
-assertSameValue($providerOutA['body'], $providerOutB['body'], 'Stub provider is deterministic for same request');
+assertSameValue(
+    $providerOutA['content_text'],
+    $providerOutB['content_text'],
+    'Stub provider is deterministic for same request'
+);
 assertSameValue($providerOutA['content_hash'], $providerOutB['content_hash'], 'Stub content hash is stable');
+assertTrue($providerOutA['ok'] === true, 'Stub provider reports ok');
+
+// --- Provider failure produces ERROR GenerationResult (not exception-only) ---
+
+final class EditorialSliceAFailingProvider implements AiProviderInterface
+{
+    public function generate(\StudyMentor\ContentEngine\GenerationRequest\GenerationRequest $request)
+    {
+        return array(
+            'ok' => false,
+            'provider_code' => 'test.failing',
+            'execution_id' => 'fail_exec_' . substr($request->requestHash(), 0, 8),
+            'duration_ms' => 2,
+            'error_code' => 'provider_unavailable',
+            'error_message' => 'Simulated provider failure.',
+        );
+    }
+}
+
+$failingOrchestrator = new GenerationOrchestrator(
+    $mapper,
+    $container->get(\StudyMentor\ContentEngine\Blueprint\ContentBlueprintBuilder::class),
+    $container->get(\StudyMentor\ContentEngine\Blueprint\ContentBlueprintValidator::class),
+    $container->get(\StudyMentor\ContentEngine\PromptContext\PromptContextBuilder::class),
+    $container->get(\StudyMentor\ContentEngine\PromptContext\PromptContextValidator::class),
+    $container->get(\StudyMentor\ContentEngine\PromptPackage\PromptPackageBuilder::class),
+    $container->get(\StudyMentor\ContentEngine\PromptPackage\PromptPackageValidator::class),
+    $container->get(\StudyMentor\ContentEngine\GenerationRequest\GenerationRequestBuilder::class),
+    $container->get(\StudyMentor\ContentEngine\GenerationRequest\GenerationRequestValidator::class),
+    new EditorialSliceAFailingProvider(),
+    $container->get(\StudyMentor\ContentEngine\GenerationResult\GenerationResultBuilder::class),
+    $container->get(\StudyMentor\ContentEngine\GenerationResult\GenerationResultValidator::class),
+    $previewRepo,
+    $platformDiagnostics
+);
+
+$failOutcome = $failingOrchestrator->generateFromAnnouncement($announcementItem);
+assertTrue($failOutcome['ok'] === false, 'Failing provider yields orchestrator failure');
+assertTrue(
+    isset($failOutcome['result']) && $failOutcome['result'] instanceof GenerationResult,
+    'Failing provider still produces GenerationResult'
+);
+assertSameValue(
+    GenerationResultStatus::ERROR,
+    $failOutcome['result']->status(),
+    'Failing provider maps to ERROR GenerationResult'
+);
+assertSameValue(
+    'provider_unavailable',
+    $failOutcome['result']->errorCode(),
+    'ERROR GenerationResult carries provider error_code'
+);
 
 if ($failures === array()) {
     fwrite(STDOUT, "Editorial Slice A smoke passed ({$passed} assertions).\n");

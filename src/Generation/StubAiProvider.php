@@ -23,7 +23,7 @@ final class StubAiProvider implements AiProviderInterface
     {
         $titleSeed = $request->packageId() . '|' . $request->requestHash();
         $titleHash = substr(hash('sha256', $titleSeed), 0, 8);
-        $body = "Stub article preview\n"
+        $contentText = "Stub article preview\n"
             . "Announcement #" . (int) $request->announcementId() . "\n"
             . "Package: " . $request->packageId() . "\n"
             . "Request: " . $request->requestId() . "\n"
@@ -31,18 +31,19 @@ final class StubAiProvider implements AiProviderInterface
             . "Token: " . $titleHash . "\n"
             . "This placeholder was produced by StubAiProvider without network access.";
 
-        $contentHash = hash('sha256', $body);
+        $contentHash = hash('sha256', $contentText);
         $artifactId = 'stub_art_' . (int) $request->announcementId() . '_' . substr($contentHash, 0, 12);
 
         return array(
-            'body' => $body,
+            'ok' => true,
+            'provider_code' => self::PROVIDER_CODE,
+            'execution_id' => 'stub_exec_' . substr($request->requestHash(), 0, 12),
+            'duration_ms' => 1,
+            'content_text' => $contentText,
             'artifact_id' => $artifactId,
             'artifact_kind' => GeneratedArtifactReference::KIND_CONTENT_CANDIDATE,
             'content_hash' => $contentHash,
             'mime_type' => 'text/plain',
-            'execution_id' => 'stub_exec_' . substr($request->requestHash(), 0, 12),
-            'provider_code' => self::PROVIDER_CODE,
-            'duration_ms' => 1,
         );
     }
 }
