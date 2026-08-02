@@ -6,7 +6,7 @@ defined('ABSPATH') || exit;
 
 final class VersionRegistry
 {
-    public const PLATFORM_PHASE = 'cip-004-acquisition-capability-enablement';
+    public const PLATFORM_PHASE = 'editorial-workspace-phase2';
 
     /** @var array<string, string> */
     private $versions = array();

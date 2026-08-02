@@ -38,12 +38,22 @@ $approvedDirectories = array(
     'src/Fingerprint',
     'src/Http',
     'src/Feed',
+    'src/Announcement',
+    'src/Article',
+    'src/Blueprint',
+    'src/Editorial',
+    'src/PromptContext',
+    'src/PromptPackage',
+    'src/Generation',
+    'src/GenerationRequest',
+    'src/GenerationResult',
     'src/Modules',
     'src/Platform',
     'src/Registry',
     'src/Support',
     'views',
     'views/admin',
+    'docs',
     'tests',
     '.github',
     '.github/architecture-guard',
@@ -104,13 +114,87 @@ $approvedFiles = array(
     'src/Modules/CorePlatformModule.php',
     'src/Modules/SourceRegistryModule.php',
     'src/Modules/AcquisitionModule.php',
+    'src/Modules/AnnouncementModule.php',
+    'src/Modules/BlueprintModule.php',
+    'src/Modules/PromptContextModule.php',
+    'src/Modules/PromptPackageModule.php',
+    'src/Modules/GenerationRequestModule.php',
+    'src/Modules/GenerationResultModule.php',
+    'src/Modules/EditorialSliceModule.php',
+    'src/Editorial/AnnouncementSnapshotMapper.php',
+    'src/Generation/AiProviderInterface.php',
+    'src/Generation/StubAiProvider.php',
+    'src/Generation/GenerationOrchestrator.php',
+    'src/Article/ArticlePreview.php',
+    'src/Article/ArticlePreviewRepositoryInterface.php',
+    'src/Article/InMemoryArticlePreviewRepository.php',
+    'src/Blueprint/ArticleType.php',
+    'src/Blueprint/BlueprintStatus.php',
+    'src/Blueprint/Tone.php',
+    'src/Blueprint/LengthTarget.php',
+    'src/Blueprint/HeadingNode.php',
+    'src/Blueprint/SectionSpec.php',
+    'src/Blueprint/FaqRequirements.php',
+    'src/Blueprint/CtaRequirement.php',
+    'src/Blueprint/LinkRequirement.php',
+    'src/Blueprint/SchemaRequirement.php',
+    'src/Blueprint/SeoConstraints.php',
+    'src/Blueprint/ValidationRuleSpec.php',
+    'src/Blueprint/ContentBlueprint.php',
+    'src/Blueprint/ContentBlueprintRepositoryInterface.php',
+    'src/Blueprint/ContentBlueprintBuilder.php',
+    'src/Blueprint/ContentBlueprintValidator.php',
+    'tests/build001-content-blueprint-smoke.php',
+    'src/PromptContext/PromptContextStatus.php',
+    'src/PromptContext/AnnouncementFacts.php',
+    'src/PromptContext/BlueprintProjection.php',
+    'src/PromptContext/PromptContext.php',
+    'src/PromptContext/PromptContextBuilder.php',
+    'src/PromptContext/PromptContextValidator.php',
+    'src/PromptContext/PromptContextRepositoryInterface.php',
+    'tests/build002-prompt-context-smoke.php',
+    'src/PromptPackage/PromptPackageStatus.php',
+    'src/PromptPackage/BlueprintReference.php',
+    'src/PromptPackage/PromptTemplateReference.php',
+    'src/PromptPackage/PromptPackage.php',
+    'src/PromptPackage/PromptPackageBuilder.php',
+    'src/PromptPackage/PromptPackageValidator.php',
+    'src/PromptPackage/PromptPackageRepositoryInterface.php',
+    'tests/build003-prompt-package-smoke.php',
+    'src/GenerationRequest/GenerationRequestStatus.php',
+    'src/GenerationRequest/GenerationModelReference.php',
+    'src/GenerationRequest/GenerationParameters.php',
+    'src/GenerationRequest/GenerationRequest.php',
+    'src/GenerationRequest/GenerationRequestBuilder.php',
+    'src/GenerationRequest/GenerationRequestValidator.php',
+    'src/GenerationRequest/GenerationRequestRepositoryInterface.php',
+    'tests/build004-generation-request-smoke.php',
+    'src/GenerationResult/GenerationResultStatus.php',
+    'src/GenerationResult/ProviderExecutionReference.php',
+    'src/GenerationResult/GeneratedArtifactReference.php',
+    'src/GenerationResult/GenerationResult.php',
+    'src/GenerationResult/GenerationResultBuilder.php',
+    'src/GenerationResult/GenerationResultValidator.php',
+    'src/GenerationResult/GenerationResultRepositoryInterface.php',
+    'tests/build005-generation-result-smoke.php',
+    'tests/editorial-slice-a-smoke.php',
+    'src/Announcement/AnnouncementCandidate.php',
+    'src/Announcement/AnnouncementIdentityService.php',
+    'src/Announcement/AnnouncementItemExtractor.php',
+    'src/Announcement/AnnouncementLifecycleService.php',
+    'src/Announcement/EditorialIngestionService.php',
+    'src/Announcement/LifecycleBatchResult.php',
+    'src/Announcement/LifecycleDecision.php',
+    'src/Announcement/LifecycleOutcome.php',
     'src/Acquisition/SourceAcquisitionService.php',
     'src/Acquisition/AcquisitionDiagnostics.php',
     'src/Acquisition/AcquisitionEngine.php',
     'src/Acquisition/AcquisitionManager.php',
     'src/Acquisition/AcquisitionResult.php',
+    'src/Acquisition/AcquisitionRunResult.php',
     'src/Acquisition/CollectorMetrics.php',
     'src/Acquisition/DownloadManager.php',
+    'src/Acquisition/ProductionAcquisitionOrchestrator.php',
     'src/Collectors/CollectorInterface.php',
     'src/Collectors/CollectorRegistry.php',
     'src/Collectors/SafeFeedCollector.php',
@@ -133,10 +217,21 @@ $approvedFiles = array(
     'tests/cip003d-collector-activation-smoke.php',
     'tests/cip003e-evidence-diagnostics-smoke.php',
     'tests/cip004-acquisition-capability-smoke.php',
+    'tests/cip005-production-orchestrator-smoke.php',
+    'src/Admin/Pages/EditorialWorkspacePage.php',
+    'src/Admin/Pages/EditorialAnnouncementsPage.php',
+    'src/Admin/Pages/EditorialQueuePage.php',
+    'views/admin/editorial-workspace.php',
+    'views/admin/editorial-announcements.php',
+    'views/admin/editorial-queue.php',
+    'src/Announcement/EditorialWorkspaceQueryService.php',
+    'tests/editorial-workspace-phase2-smoke.php',
+    'tests/editorial-spine-phase1-smoke.php',
     '.github/architecture-guard/policy.txt',
     '.github/architecture-guard/check.php',
     '.github/workflows/architecture-guard.yml',
     'tests/static-safety-check.php',
+    'docs/EDITORIAL_FOUNDATION_v0.10.0.md',
 );
 
 $blockedDirectoryNames = array(
@@ -260,9 +355,13 @@ $databasePatternsForbiddenInSourceRepository = array(
 $requiredSourceItemRepositorySnippets = array(
     '$wpdb',
     '->prepare',
-    '->get_var',
+    '->get_row',
     '->insert',
+    '->update',
     'existsBySourceAndIdentityHash',
+    'findBySourceAndIdentityHash',
+    'markUnchanged',
+    'applyContentUpdate',
     'identity_hash',
     'smce_source_items',
 );
@@ -273,7 +372,6 @@ $databasePatternsForbiddenInSourceItemRepository = array(
     'add_option',
     'update_option',
     'delete_option',
-    '->update(',
     '->delete(',
     '->replace(',
     '->query(',
@@ -710,6 +808,15 @@ foreach ($iterator as $item) {
                     || $relativePath === 'tests/cip003d-collector-activation-smoke.php'
                     || $relativePath === 'tests/cip003e-evidence-diagnostics-smoke.php'
                     || $relativePath === 'tests/cip004-acquisition-capability-smoke.php'
+                    || $relativePath === 'tests/cip005-production-orchestrator-smoke.php'
+                    || $relativePath === 'tests/editorial-spine-phase1-smoke.php'
+                    || $relativePath === 'tests/editorial-workspace-phase2-smoke.php'
+                    || $relativePath === 'tests/build001-content-blueprint-smoke.php'
+                    || $relativePath === 'tests/build002-prompt-context-smoke.php'
+                    || $relativePath === 'tests/build003-prompt-package-smoke.php'
+                    || $relativePath === 'tests/build004-generation-request-smoke.php'
+                    || $relativePath === 'tests/build005-generation-result-smoke.php'
+                    || $relativePath === 'tests/editorial-slice-a-smoke.php'
                 )
             ) {
                 continue;
@@ -797,11 +904,13 @@ foreach ($iterator as $item) {
         }
 
         if (
-            $relativePath !== $sourceRepositoryRelativePath
+            !in_array($relativePath, array($sourceRepositoryRelativePath, $sourceItemRepositoryRelativePath), true)
             && containsForbiddenPattern($contents, 'wpdb->update(', true)
         ) {
             $failures[] = '$wpdb->update() is only allowed in '
                 . $sourceRepositoryRelativePath
+                . ' or '
+                . $sourceItemRepositoryRelativePath
                 . '; found in '
                 . $relativePath;
         }
@@ -1112,9 +1221,9 @@ $mainContents = file_get_contents($mainFile);
 
 if (
     $mainContents === false
-    || preg_match('/^\s*\*\s*Version:\s*0\.9\.1\s*$/m', $mainContents) !== 1
+    || preg_match('/^\s*\*\s*Version:\s*0\.10\.0\s*$/m', $mainContents) !== 1
     || preg_match(
-        '/define\(\s*[\'"]SMCE_VERSION[\'"]\s*,\s*[\'"]0\.9\.1[\'"]\s*\)/',
+        '/define\(\s*[\'"]SMCE_VERSION[\'"]\s*,\s*[\'"]0\.10\.0[\'"]\s*\)/',
         $mainContents
     ) !== 1
     || preg_match(
@@ -1130,9 +1239,9 @@ $readmeContents = file_get_contents($readmeFile);
 
 if (
     $readmeContents === false
-    || preg_match('/^\s*Stable tag:\s*0\.9\.1\s*$/m', $readmeContents) !== 1
+    || preg_match('/^\s*Stable tag:\s*0\.10\.0\s*$/m', $readmeContents) !== 1
 ) {
-    $failures[] = 'readme.txt stable tag must be 0.9.1.';
+    $failures[] = 'readme.txt stable tag must be 0.10.0.';
 }
 
 $schemaManagerFile = $pluginDirectory
@@ -1259,8 +1368,12 @@ if ($sourceItemRepositoryContents === false) {
         $failures[] = 'SourceItemRepository must not call $wpdb->delete().';
     }
 
-    if (containsForbiddenPattern($sourceItemRepositoryContents, 'wpdb->update(', true)) {
-        $failures[] = 'SourceItemRepository must not call $wpdb->update().';
+    if (strpos($sourceItemRepositoryContents, 'markUnchanged') === false) {
+        $failures[] = 'SourceItemRepository must provide markUnchanged for lifecycle.';
+    }
+
+    if (strpos($sourceItemRepositoryContents, 'applyContentUpdate') === false) {
+        $failures[] = 'SourceItemRepository must provide applyContentUpdate for lifecycle.';
     }
 }
 
@@ -2082,8 +2195,27 @@ if (
     $failures[] = 'Connectivity Audit submenu must be registered after Bulk Sources and before Manual Intake.';
 }
 
-if (count($approvedFiles) !== 86) {
-    $failures[] = 'Approved file inventory must contain exactly 86 files.';
+if (
+    $menuContents === false
+    || strpos($menuContents, "'smce-editorial'") === false
+    || strpos($menuContents, "'smce-editorial-announcements'") === false
+    || strpos($menuContents, "'smce-editorial-queue'") === false
+) {
+    $failures[] = 'Editorial Workspace submenu pages are missing from Menu registration.';
+} elseif (
+    strpos($menuContents, "'smce-diagnostics'") === false
+    || strpos($menuContents, "'smce-editorial'")
+        < strpos($menuContents, "'smce-diagnostics'")
+    || strpos($menuContents, "'smce-editorial-announcements'")
+        < strpos($menuContents, "'smce-editorial'")
+    || strpos($menuContents, "'smce-editorial-queue'")
+        < strpos($menuContents, "'smce-editorial-announcements'")
+) {
+    $failures[] = 'Editorial Workspace submenus must be registered after Diagnostics in workspace order.';
+}
+
+if (count($approvedFiles) !== 171) {
+    $failures[] = 'Approved file inventory must contain exactly 171 files.';
 }
 
 $phpFilesToLint = array();
@@ -2260,6 +2392,34 @@ $cip002FoundationFiles = array(
         'final class AcquisitionModule',
         "return 'acquisition'",
     ),
+    'src/Modules/AnnouncementModule.php' => array(
+        'final class AnnouncementModule',
+        "return 'announcement'",
+    ),
+    'src/Modules/BlueprintModule.php' => array(
+        'final class BlueprintModule',
+        "return 'blueprint'",
+    ),
+    'src/Modules/PromptContextModule.php' => array(
+        'final class PromptContextModule',
+        "return 'prompt_context'",
+    ),
+    'src/Modules/PromptPackageModule.php' => array(
+        'final class PromptPackageModule',
+        "return 'prompt_package'",
+    ),
+    'src/Modules/GenerationRequestModule.php' => array(
+        'final class GenerationRequestModule',
+        "return 'generation_request'",
+    ),
+    'src/Modules/GenerationResultModule.php' => array(
+        'final class GenerationResultModule',
+        "return 'generation_result'",
+    ),
+    'src/Modules/EditorialSliceModule.php' => array(
+        'final class EditorialSliceModule',
+        "return 'editorial_slice'",
+    ),
     'src/Registry/CapabilityRegistry.php' => array(
         'final class CapabilityRegistry',
         'SOURCE_REGISTRY',
@@ -2273,7 +2433,7 @@ $cip002FoundationFiles = array(
     ),
     'src/Registry/VersionRegistry.php' => array(
         'final class VersionRegistry',
-        'cip-004-acquisition-capability-enablement',
+        'editorial-workspace-phase2',
     ),
     'src/Platform/PlatformDiagnostics.php' => array(
         'final class PlatformDiagnostics',
@@ -2333,6 +2493,13 @@ if ($pluginBootstrapContents === false) {
         'CorePlatformModule',
         'SourceRegistryModule',
         'AcquisitionModule',
+        'AnnouncementModule',
+        'BlueprintModule',
+        'PromptContextModule',
+        'PromptPackageModule',
+        'GenerationRequestModule',
+        'GenerationResultModule',
+        'EditorialSliceModule',
     );
 
     foreach ($requiredPluginSnippets as $snippet) {

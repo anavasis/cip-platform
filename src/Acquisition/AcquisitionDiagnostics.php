@@ -31,6 +31,9 @@ final class AcquisitionDiagnostics
     private $failureCount;
     /** @var array<string, mixed>|null */
     private $startupValidation;
+    /** @var array<string, mixed>|null */
+    private $lastProductionRun;
+    private $productionRunsRecorded;
 
     public function __construct(
         CollectorRegistry $collectorRegistry,
@@ -50,6 +53,8 @@ final class AcquisitionDiagnostics
         $this->acquisitionCount = 0;
         $this->failureCount = 0;
         $this->startupValidation = null;
+        $this->lastProductionRun = null;
+        $this->productionRunsRecorded = 0;
     }
 
     /**
@@ -59,6 +64,34 @@ final class AcquisitionDiagnostics
     public function recordStartupValidation(array $validation)
     {
         $this->startupValidation = $validation;
+    }
+
+    /**
+     * @param array<string, mixed> $run
+     * @return void
+     */
+    public function recordProductionRun(array $run)
+    {
+        $status = isset($run['status']) ? (string) $run['status'] : '';
+
+        $this->lastProductionRun = array(
+            'run_id' => isset($run['run_id']) ? (string) $run['run_id'] : '',
+            'status' => $status,
+            'error_code' => isset($run['error_code']) ? (string) $run['error_code'] : '',
+            'sources_requested' => isset($run['sources_requested'])
+                ? (int) $run['sources_requested']
+                : 0,
+            'sources_succeeded' => isset($run['sources_succeeded'])
+                ? (int) $run['sources_succeeded']
+                : 0,
+            'sources_failed' => isset($run['sources_failed'])
+                ? (int) $run['sources_failed']
+                : 0,
+        );
+
+        if ($status === 'completed' || $status === 'gate_rejected') {
+            $this->productionRunsRecorded++;
+        }
     }
 
     /**
@@ -102,6 +135,20 @@ final class AcquisitionDiagnostics
                 'checks' => array(),
             );
 
+        $orchestratorStatus = 'idle';
+        $productionRuntime = $capabilityEnabled ? 'idle' : 'inactive';
+
+        if (
+            is_array($this->lastProductionRun)
+            && isset($this->lastProductionRun['status'])
+            && $this->lastProductionRun['status'] === 'running'
+        ) {
+            $orchestratorStatus = 'running';
+            $productionRuntime = 'running';
+        } elseif ($capabilityEnabled) {
+            $orchestratorStatus = 'ready';
+        }
+
         return array(
             'acquisition_engine' => $capabilityEnabled ? 'active' : 'ready',
             'acquisition_runtime' => $capabilityEnabled ? 'active' : 'inactive',
@@ -126,6 +173,12 @@ final class AcquisitionDiagnostics
             'scheduler' => 'disabled',
             'ai' => 'disabled',
             'startup_validation' => $startupValidation,
+            'production_runtime' => $productionRuntime,
+            'production_orchestrator' => array(
+                'status' => $orchestratorStatus,
+                'runs_recorded' => $this->productionRunsRecorded,
+                'last_run' => $this->lastProductionRun,
+            ),
             'fingerprint' => $this->fingerprintService->describe(),
             'evidence' => array(
                 'store' => 'in_memory',

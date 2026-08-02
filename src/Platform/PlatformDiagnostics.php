@@ -17,6 +17,14 @@ final class PlatformDiagnostics
     private $featureFlags;
     private $versionRegistry;
     private $acquisitionDiagnostics;
+    /** @var object|null */
+    private $announcementLifecycleService;
+    /** @var object|null */
+    private $editorialIngestionService;
+    /** @var array<string, mixed>|null */
+    private $lastIngestion;
+    /** @var array<string, mixed>|null */
+    private $lastGeneration;
 
     public function __construct(
         ModuleRegistry $moduleRegistry,
@@ -30,6 +38,45 @@ final class PlatformDiagnostics
         $this->featureFlags = $featureFlags;
         $this->versionRegistry = $versionRegistry;
         $this->acquisitionDiagnostics = $acquisitionDiagnostics;
+        $this->announcementLifecycleService = null;
+        $this->editorialIngestionService = null;
+        $this->lastIngestion = null;
+        $this->lastGeneration = null;
+    }
+
+    /**
+     * Bound by AnnouncementModule::boot() to avoid CorePlatform ↔ Announcement coupling.
+     *
+     * @param object $lifecycleService
+     * @param object $ingestionService
+     * @return void
+     */
+    public function bindAnnouncementSpine($lifecycleService, $ingestionService)
+    {
+        $this->announcementLifecycleService = $lifecycleService;
+        $this->editorialIngestionService = $ingestionService;
+    }
+
+    /**
+     * Editorial Slice A: last manual ingestion outcome (request-scoped / in-memory).
+     *
+     * @param array<string, mixed> $payload
+     * @return void
+     */
+    public function recordLastIngestion(array $payload)
+    {
+        $this->lastIngestion = $payload;
+    }
+
+    /**
+     * Editorial Slice A: last generate → BUILD → stub → preview outcome.
+     *
+     * @param array<string, mixed> $payload
+     * @return void
+     */
+    public function recordLastGeneration(array $payload)
+    {
+        $this->lastGeneration = $payload;
     }
 
     /**
@@ -97,10 +144,17 @@ final class PlatformDiagnostics
             'capabilities' => $capabilities,
             'feature_flags' => $flags,
             'acquisition_engine' => $acquisitionEngineStatus,
+            'announcement_lifecycle' => $this->announcementLifecycleStatus(),
+            'last_ingestion' => $this->lastIngestion,
+            'last_generation' => $this->lastGeneration,
             'confirmations' => array(
                 'collector_routing' => $collectorRouting,
                 'evidence_store' => 'In-Memory',
                 'startup_validation' => $startupValidation,
+                'production_orchestrator' => $this->productionOrchestratorConfirmation(
+                    $acquisitionEngineStatus
+                ),
+                'announcement_lifecycle' => $this->announcementLifecycleConfirmation(),
                 'acquisition' => $this->capabilityRegistry->isEnabled(CapabilityRegistry::ACQUISITION)
                     ? 'Active'
                     : 'Inactive',
@@ -115,5 +169,69 @@ final class PlatformDiagnostics
                     : 'Inactive',
             ),
         );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function announcementLifecycleStatus()
+    {
+        if (
+            $this->announcementLifecycleService !== null
+            && method_exists($this->announcementLifecycleService, 'diagnosticsStatus')
+        ) {
+            $status = $this->announcementLifecycleService->diagnosticsStatus();
+
+            if (is_array($status)) {
+                return $status;
+            }
+        }
+
+        return array(
+            'status' => 'not_bound',
+            'store' => 'smce_source_items',
+            'last_batch' => null,
+        );
+    }
+
+    /**
+     * @return string
+     */
+    private function announcementLifecycleConfirmation()
+    {
+        $status = $this->announcementLifecycleStatus();
+
+        if (isset($status['status']) && $status['status'] === 'ready') {
+            return 'Ready';
+        }
+
+        return 'Not ready';
+    }
+
+    /**
+     * @param array<string, mixed> $acquisitionEngineStatus
+     * @return string
+     */
+    private function productionOrchestratorConfirmation(array $acquisitionEngineStatus)
+    {
+        if (
+            !isset($acquisitionEngineStatus['production_orchestrator'])
+            || !is_array($acquisitionEngineStatus['production_orchestrator'])
+            || !isset($acquisitionEngineStatus['production_orchestrator']['status'])
+        ) {
+            return 'Not ready';
+        }
+
+        $status = (string) $acquisitionEngineStatus['production_orchestrator']['status'];
+
+        if ($status === 'running') {
+            return 'Active';
+        }
+
+        if ($status === 'ready' || $status === 'idle') {
+            return 'Ready';
+        }
+
+        return 'Not ready';
     }
 }

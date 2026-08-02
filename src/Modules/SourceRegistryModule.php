@@ -6,6 +6,9 @@ use StudyMentor\ContentEngine\Admin\BulkConnectivityAuditService;
 use StudyMentor\ContentEngine\Admin\Menu;
 use StudyMentor\ContentEngine\Admin\Pages\BulkSourcesPage;
 use StudyMentor\ContentEngine\Admin\Pages\ConnectivityAuditPage;
+use StudyMentor\ContentEngine\Admin\Pages\EditorialAnnouncementsPage;
+use StudyMentor\ContentEngine\Admin\Pages\EditorialQueuePage;
+use StudyMentor\ContentEngine\Admin\Pages\EditorialWorkspacePage;
 use StudyMentor\ContentEngine\Admin\Pages\ImportedItemsPage;
 use StudyMentor\ContentEngine\Admin\Pages\ManualAnnouncementsPage;
 use StudyMentor\ContentEngine\Admin\Pages\SourcesPage;
@@ -13,6 +16,9 @@ use StudyMentor\ContentEngine\Admin\SourceActionHandler;
 use StudyMentor\ContentEngine\Admin\SourceCatalogActionHandler;
 use StudyMentor\ContentEngine\Admin\SourceCheckService;
 use StudyMentor\ContentEngine\Admin\SourceItemActionHandler;
+use StudyMentor\ContentEngine\Announcement\EditorialIngestionService;
+use StudyMentor\ContentEngine\Announcement\EditorialWorkspaceQueryService;
+use StudyMentor\ContentEngine\Article\ArticlePreviewRepositoryInterface;
 use StudyMentor\ContentEngine\Contracts\ModuleInterface;
 use StudyMentor\ContentEngine\Core\FeatureFlags;
 use StudyMentor\ContentEngine\Core\ServiceContainer;
@@ -24,8 +30,10 @@ use StudyMentor\ContentEngine\Data\SourceRegistryService;
 use StudyMentor\ContentEngine\Data\SourceRepository;
 use StudyMentor\ContentEngine\Feed\AsepAnnouncementsHtmlParser;
 use StudyMentor\ContentEngine\Feed\FeedPreviewParser;
+use StudyMentor\ContentEngine\Generation\GenerationOrchestrator;
 use StudyMentor\ContentEngine\Http\SafeFeedFetcher;
 use StudyMentor\ContentEngine\Http\SafeUrlGuard;
+use StudyMentor\ContentEngine\Platform\PlatformDiagnostics;
 
 defined('ABSPATH') || exit;
 
@@ -238,6 +246,58 @@ final class SourceRegistryModule implements ModuleInterface
             );
         }
 
+        if (!$container->has(EditorialWorkspaceQueryService::class)) {
+            $container->set(
+                EditorialWorkspaceQueryService::class,
+                new EditorialWorkspaceQueryService()
+            );
+        }
+
+        if (!$container->has(EditorialWorkspacePage::class)) {
+            $container->factory(
+                EditorialWorkspacePage::class,
+                static function (ServiceContainer $c) {
+                    return new EditorialWorkspacePage(
+                        $c->get(SourceItemReadRepository::class),
+                        $c->get(SourceRepository::class),
+                        $c->get(EditorialIngestionService::class),
+                        $c->get(PlatformDiagnostics::class),
+                        SMCE_PLUGIN_DIR . 'views/admin/editorial-workspace.php'
+                    );
+                }
+            );
+        }
+
+        if (!$container->has(EditorialAnnouncementsPage::class)) {
+            $container->factory(
+                EditorialAnnouncementsPage::class,
+                static function (ServiceContainer $c) {
+                    return new EditorialAnnouncementsPage(
+                        $c->get(SourceItemReadRepository::class),
+                        $c->get(EditorialWorkspaceQueryService::class),
+                        $c->get(PlatformDiagnostics::class),
+                        $c->get(GenerationOrchestrator::class),
+                        $c->get(ArticlePreviewRepositoryInterface::class),
+                        SMCE_PLUGIN_DIR . 'views/admin/editorial-announcements.php'
+                    );
+                }
+            );
+        }
+
+        if (!$container->has(EditorialQueuePage::class)) {
+            $container->factory(
+                EditorialQueuePage::class,
+                static function (ServiceContainer $c) {
+                    return new EditorialQueuePage(
+                        $c->get(SourceItemReadRepository::class),
+                        $c->get(EditorialWorkspaceQueryService::class),
+                        $c->get(PlatformDiagnostics::class),
+                        SMCE_PLUGIN_DIR . 'views/admin/editorial-queue.php'
+                    );
+                }
+            );
+        }
+
         if (!$container->has(Menu::class)) {
             $container->factory(
                 Menu::class,
@@ -246,6 +306,9 @@ final class SourceRegistryModule implements ModuleInterface
                         $c->get(\StudyMentor\ContentEngine\Admin\Pages\DashboardPage::class),
                         $c->get(\StudyMentor\ContentEngine\Admin\Pages\SettingsPage::class),
                         $c->get(\StudyMentor\ContentEngine\Admin\Pages\DiagnosticsPage::class),
+                        $c->get(EditorialWorkspacePage::class),
+                        $c->get(EditorialAnnouncementsPage::class),
+                        $c->get(EditorialQueuePage::class),
                         $c->get(FeatureFlags::class),
                         $c->get(SourcesPage::class),
                         $c->get(BulkSourcesPage::class),

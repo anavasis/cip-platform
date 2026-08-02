@@ -7,7 +7,14 @@ use StudyMentor\ContentEngine\Admin\SourceActionHandler;
 use StudyMentor\ContentEngine\Admin\SourceCatalogActionHandler;
 use StudyMentor\ContentEngine\Admin\SourceItemActionHandler;
 use StudyMentor\ContentEngine\Modules\AcquisitionModule;
+use StudyMentor\ContentEngine\Modules\AnnouncementModule;
+use StudyMentor\ContentEngine\Modules\BlueprintModule;
 use StudyMentor\ContentEngine\Modules\CorePlatformModule;
+use StudyMentor\ContentEngine\Modules\EditorialSliceModule;
+use StudyMentor\ContentEngine\Modules\GenerationRequestModule;
+use StudyMentor\ContentEngine\Modules\GenerationResultModule;
+use StudyMentor\ContentEngine\Modules\PromptContextModule;
+use StudyMentor\ContentEngine\Modules\PromptPackageModule;
 use StudyMentor\ContentEngine\Modules\SourceRegistryModule;
 
 defined('ABSPATH') || exit;
@@ -28,6 +35,13 @@ final class Plugin
         $moduleRegistry->register(new CorePlatformModule());
         $moduleRegistry->register(new SourceRegistryModule());
         $moduleRegistry->register(new AcquisitionModule());
+        $moduleRegistry->register(new AnnouncementModule());
+        $moduleRegistry->register(new BlueprintModule());
+        $moduleRegistry->register(new PromptContextModule());
+        $moduleRegistry->register(new PromptPackageModule());
+        $moduleRegistry->register(new GenerationRequestModule());
+        $moduleRegistry->register(new GenerationResultModule());
+        $moduleRegistry->register(new EditorialSliceModule());
 
         $moduleLoader = new ModuleLoader($moduleRegistry, $container);
         $moduleLoader->load();

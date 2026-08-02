@@ -18,7 +18,7 @@ if (!defined('SMCE_PLUGIN_DIR')) {
 }
 
 if (!defined('SMCE_VERSION')) {
-    define('SMCE_VERSION', '0.9.1');
+    define('SMCE_VERSION', '0.10.0');
 }
 
 if (!defined('SMCE_DB_VERSION')) {
@@ -168,7 +168,7 @@ assertTrue(
 
 $versionRegistry = $container->get(VersionRegistry::class);
 assertSameValue(
-    'cip-004-acquisition-capability-enablement',
+    'editorial-workspace-phase2',
     $versionRegistry->get('platform_phase'),
     'VersionRegistry platform phase must match CIP-003D label'
 );
@@ -177,7 +177,7 @@ $platformDiagnostics = $container->get(PlatformDiagnostics::class);
 $diagnostics = $platformDiagnostics->collect();
 
 assertSameValue(
-    'cip-004-acquisition-capability-enablement',
+    'editorial-workspace-phase2',
     $diagnostics['versions']['platform_phase'],
     'PlatformDiagnostics phase label must match CIP-003D label'
 );

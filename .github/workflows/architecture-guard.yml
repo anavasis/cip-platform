@@ -46,3 +46,30 @@ jobs:
 
       - name: Run CIP-004 Acquisition Capability Smoke Test
         run: php tests/cip004-acquisition-capability-smoke.php
+
+      - name: Run CIP-005 Production Orchestrator Smoke Test
+        run: php tests/cip005-production-orchestrator-smoke.php
+
+      - name: Run Editorial Spine Phase 1 Smoke Test
+        run: php tests/editorial-spine-phase1-smoke.php
+
+      - name: Run Editorial Workspace Phase 2 Smoke Test
+        run: php tests/editorial-workspace-phase2-smoke.php
+
+      - name: Run BUILD-001 Content Blueprint Smoke Test
+        run: php tests/build001-content-blueprint-smoke.php
+
+      - name: Run BUILD-002 Prompt Context Smoke Test
+        run: php tests/build002-prompt-context-smoke.php
+
+      - name: Run BUILD-003 Prompt Package Smoke Test
+        run: php tests/build003-prompt-package-smoke.php
+
+      - name: Run BUILD-004 Generation Request Smoke Test
+        run: php tests/build004-generation-request-smoke.php
+
+      - name: Run BUILD-005 Generation Result Smoke Test
+        run: php tests/build005-generation-result-smoke.php
+
+      - name: Run Editorial Slice A Smoke Test
+        run: php tests/editorial-slice-a-smoke.php

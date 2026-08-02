@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: StudyMentor Content Engine
- * Description: Standalone internal inactive shell for the StudyMentor Content Engine.
- * Version: 0.9.1
+ * Description: StudyMentor Content Engine — Editorial Foundation baseline.
+ * Version: 0.10.0
  * Requires at least: 5.8
  * Requires PHP: 7.4
  * Author: StudyMentor
@@ -11,7 +11,7 @@
 
 defined('ABSPATH') || exit;
 
-define('SMCE_VERSION', '0.9.1');
+define('SMCE_VERSION', '0.10.0');
 define('SMCE_DB_VERSION', '1.0.0');
 define('SMCE_PLUGIN_FILE', __FILE__);
 define('SMCE_PLUGIN_DIR', plugin_dir_path(__FILE__));
