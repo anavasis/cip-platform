@@ -17,7 +17,7 @@ if (!defined('SMCE_PLUGIN_DIR')) {
 }
 
 if (!defined('SMCE_VERSION')) {
-    define('SMCE_VERSION', '0.9.1');
+    define('SMCE_VERSION', '0.10.0');
 }
 
 if (!defined('SMCE_DB_VERSION')) {

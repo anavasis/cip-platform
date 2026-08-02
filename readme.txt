@@ -2,20 +2,25 @@
 Contributors: studymentor
 Requires at least: 5.8
 Requires PHP: 7.4
-Stable tag: 0.9.1
+Stable tag: 0.10.0
 License: Proprietary
 
-Standalone internal inactive shell for the StudyMentor Content Engine.
+StudyMentor Content Engine — Editorial Foundation baseline.
 
 == Description ==
 
-Version 0.6.0 adds Phase 1F: an administrator-only manual JSON announcement
-intake for existing manual-only sources. Paste a strict JSON array, Preview
-with zero persistence, then perform a separate explicit Confirm Import. Only
-insert-only source-item persistence with race-safe unique-key deduplication.
-No external fetch, no DNS, no automatic collection, no update or delete, no
-cron, no publishing, no schema change, and no Client Panel or /asep/
-integration.
+Version 0.10.0 is the Editorial Foundation release: one integrated baseline
+comprising CIP-005 (Production Acquisition Orchestrator), Editorial Spine
+Phase 1 (Announcement Lifecycle), Editorial Workspace Phase 2, BUILD-001
+through BUILD-005 (Content Blueprint → Prompt Context → Prompt Package →
+Generation Request → Generation Result), and Editorial Slice A (generate →
+stub provider → in-memory article preview). No WordPress publishing.
+
+See docs/EDITORIAL_FOUNDATION_v0.10.0.md for the foundation definition,
+Architecture Guard one-time release exception, and post-merge checklist.
+
+Earlier phases (manual sources, source check, imported items, bulk tools)
+remain available as platform capabilities under this foundation.
 
 Version 0.5.0 adds Phase 1D: a manual ASEP announcements HTML preview using
 parser profile asep_announcements_v1, on the same guarded synchronous fetch
@@ -39,6 +44,12 @@ Panel integration.
 Installation and activation are outside the scope of Phase 1C.
 
 == Changelog ==
+
+= 0.10.0 =
+* Editorial Foundation baseline: CIP-005, Editorial Spine Phase 1, Editorial Workspace Phase 2, BUILD-001…005, and Editorial Slice A as one integrated release.
+* Manual editorial ingestion, announcement lifecycle, workspace UI, BUILD generate pipeline, deterministic StubAiProvider, and in-memory article preview.
+* No publishing, workflow, scheduler, compliance, real AI providers, or persistent preview storage.
+* Architecture Guard one-time MAX_FILES exception for this foundation merge only; restore MAX_FILES to 25 immediately after merge (see docs/EDITORIAL_FOUNDATION_v0.10.0.md).
 
 = 0.9.1 =
 * Connectivity Audit now classifies recognizable HTML, RSS, or Atom prefixes from safely truncated (oversized) responses using the existing bounded 16384-byte prefix, without increasing transfer, body, timeout, or redirect limits.

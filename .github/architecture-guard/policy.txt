@@ -1,8 +1,14 @@
 MODE
 subset
 
+# Editorial Foundation v0.10.0 — ONE-TIME RELEASE EXCEPTION
+# Elevated MAX_FILES allows the integrated Editorial Foundation stack
+# (CIP-005 → Spine → Workspace → BUILD-001…005 → Slice A) to merge to main.
+# IMMEDIATELY AFTER this Foundation PR merges to main, restore MAX_FILES to 25.
+# Do not leave this elevated limit on main for Slice B+ work.
+# See docs/EDITORIAL_FOUNDATION_v0.10.0.md
 MAX_FILES
-25
+120
 
 FORBIDDEN
 composer.json
@@ -26,6 +32,9 @@ src/Http/
 studymentor-content-engine.php
 
 ALLOWED
+studymentor-content-engine.php
+readme.txt
+docs/EDITORIAL_FOUNDATION_v0.10.0.md
 src/Core/Plugin.php
 src/Admin/Pages/DiagnosticsPage.php
 views/admin/diagnostics.php

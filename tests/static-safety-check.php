@@ -53,6 +53,7 @@ $approvedDirectories = array(
     'src/Support',
     'views',
     'views/admin',
+    'docs',
     'tests',
     '.github',
     '.github/architecture-guard',
@@ -230,6 +231,7 @@ $approvedFiles = array(
     '.github/architecture-guard/check.php',
     '.github/workflows/architecture-guard.yml',
     'tests/static-safety-check.php',
+    'docs/EDITORIAL_FOUNDATION_v0.10.0.md',
 );
 
 $blockedDirectoryNames = array(
@@ -1219,9 +1221,9 @@ $mainContents = file_get_contents($mainFile);
 
 if (
     $mainContents === false
-    || preg_match('/^\s*\*\s*Version:\s*0\.9\.1\s*$/m', $mainContents) !== 1
+    || preg_match('/^\s*\*\s*Version:\s*0\.10\.0\s*$/m', $mainContents) !== 1
     || preg_match(
-        '/define\(\s*[\'"]SMCE_VERSION[\'"]\s*,\s*[\'"]0\.9\.1[\'"]\s*\)/',
+        '/define\(\s*[\'"]SMCE_VERSION[\'"]\s*,\s*[\'"]0\.10\.0[\'"]\s*\)/',
         $mainContents
     ) !== 1
     || preg_match(
@@ -1237,9 +1239,9 @@ $readmeContents = file_get_contents($readmeFile);
 
 if (
     $readmeContents === false
-    || preg_match('/^\s*Stable tag:\s*0\.9\.1\s*$/m', $readmeContents) !== 1
+    || preg_match('/^\s*Stable tag:\s*0\.10\.0\s*$/m', $readmeContents) !== 1
 ) {
-    $failures[] = 'readme.txt stable tag must be 0.9.1.';
+    $failures[] = 'readme.txt stable tag must be 0.10.0.';
 }
 
 $schemaManagerFile = $pluginDirectory
@@ -2212,8 +2214,8 @@ if (
     $failures[] = 'Editorial Workspace submenus must be registered after Diagnostics in workspace order.';
 }
 
-if (count($approvedFiles) !== 170) {
-    $failures[] = 'Approved file inventory must contain exactly 170 files.';
+if (count($approvedFiles) !== 171) {
+    $failures[] = 'Approved file inventory must contain exactly 171 files.';
 }
 
 $phpFilesToLint = array();
