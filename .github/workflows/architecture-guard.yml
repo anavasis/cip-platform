@@ -61,3 +61,9 @@ jobs:
 
       - name: Run BUILD-002 Prompt Context Smoke Test
         run: php tests/build002-prompt-context-smoke.php
+
+      - name: Run BUILD-003 Prompt Package Smoke Test
+        run: php tests/build003-prompt-package-smoke.php
+
+      - name: Run BUILD-004 Generation Request Smoke Test
+        run: php tests/build004-generation-request-smoke.php
