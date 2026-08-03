@@ -2,16 +2,24 @@
 
 namespace App\Modules\Acquisition\Application;
 
+use App\Application\Services\EventBusService;
+use App\Modules\Acquisition\Domain\Events\SourceCreated;
+use App\Modules\Acquisition\Domain\Events\SourceDisabled;
+use App\Modules\Acquisition\Domain\Events\SourceEnabled;
+use App\Modules\Acquisition\Domain\Events\SourceUpdated;
 use App\Modules\Acquisition\Domain\Sources\SourceRepositoryInterface;
 use Illuminate\Support\Str;
 
 final readonly class SourceRegistryService
 {
-    private const SOURCE_TYPES = ['rss', 'atom', 'html', 'manual'];
+    private const SOURCE_TYPES = ['rss', 'atom', 'html', 'json', 'xml', 'pdf', 'manual'];
 
     private const SLUG_PATTERN = '/^[a-z0-9]+(?:-[a-z0-9]+)*$/';
 
-    public function __construct(private SourceRepositoryInterface $repository) {}
+    public function __construct(
+        private SourceRepositoryInterface $repository,
+        private ?EventBusService $eventBus = null,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $input
@@ -91,14 +99,30 @@ final readonly class SourceRegistryService
             'feed_url_hash' => $feedHash,
             'allowed_domains' => $domainsResult['value'],
             'parser_profile' => $parserResult['value'],
-            'enabled' => false,
-            'manual_only' => true,
+            'enabled' => $this->booleanValue($input['enabled'] ?? false),
+            'manual_only' => $this->booleanValue($input['manual_only'] ?? true),
             'created_at_utc' => $utcNow,
             'updated_at_utc' => $utcNow,
         ]);
 
         if ($insertId === false) {
             return ['success' => false, 'error' => 'database'];
+        }
+
+        $this->eventBus?->dispatch(new SourceCreated(
+            $organizationId,
+            $projectId,
+            (string) $insertId,
+            (string) $slugResult['value'],
+            (string) $typeResult['value'],
+        ));
+
+        if ($this->booleanValue($input['enabled'] ?? false)) {
+            $this->eventBus?->dispatch(new SourceEnabled(
+                $organizationId,
+                $projectId,
+                (string) $insertId,
+            ));
         }
 
         return ['success' => true, 'id' => $insertId];
@@ -124,7 +148,9 @@ final readonly class SourceRegistryService
             return ['success' => false, 'error' => 'invalid_id'];
         }
 
-        if ($this->repository->findById($organizationId, $projectId, $sourceId) === null) {
+        $existing = $this->repository->findById($organizationId, $projectId, $sourceId);
+
+        if ($existing === null) {
             return ['success' => false, 'error' => 'not_found'];
         }
 
@@ -175,7 +201,7 @@ final readonly class SourceRegistryService
             return ['success' => false, 'error' => 'validation'];
         }
 
-        $updated = $this->repository->update($sourceId, [
+        $updates = [
             'organization_id' => $organizationId,
             'project_id' => $projectId,
             'name' => $nameResult['value'],
@@ -185,9 +211,37 @@ final readonly class SourceRegistryService
             'feed_url_hash' => $feedHash,
             'allowed_domains' => $domainsResult['value'],
             'parser_profile' => $parserResult['value'],
-            'manual_only' => true,
+            'manual_only' => $this->booleanValue($input['manual_only'] ?? ($existing['manual_only'] ?? true)),
             'updated_at_utc' => gmdate('Y-m-d H:i:s'),
-        ]);
+        ];
+
+        if (array_key_exists('enabled', $input)) {
+            $updates['enabled'] = $this->booleanValue($input['enabled']);
+        }
+
+        $updated = $this->repository->update($sourceId, $updates);
+
+        if ($updated) {
+            $changedFields = [];
+
+            foreach (array_keys($updates) as $field) {
+                if (! in_array($field, ['organization_id', 'project_id', 'updated_at_utc'], true)) {
+                    $changedFields[] = $field;
+                }
+            }
+
+            $this->eventBus?->dispatch(new SourceUpdated(
+                $organizationId,
+                $projectId,
+                $sourceId,
+                $changedFields,
+            ));
+
+            if (array_key_exists('enabled', $updates)
+                && (bool) ($existing['enabled'] ?? false) !== $updates['enabled']) {
+                $this->dispatchToggleEvent($organizationId, $projectId, $sourceId, $updates['enabled']);
+            }
+        }
 
         return $updated
             ? ['success' => true, 'id' => $sourceId]
@@ -218,6 +272,8 @@ final readonly class SourceRegistryService
         if (! $this->repository->setEnabled($organizationId, $projectId, $sourceId, $enabled)) {
             return ['success' => false, 'error' => 'database'];
         }
+
+        $this->dispatchToggleEvent($organizationId, $projectId, $sourceId, $enabled);
 
         return ['success' => true, 'id' => $sourceId, 'enabled' => $enabled];
     }
@@ -425,5 +481,23 @@ final readonly class SourceRegistryService
     private function validTenant(string $organizationId, string $projectId): bool
     {
         return trim($organizationId) !== '' && trim($projectId) !== '';
+    }
+
+    private function booleanValue(mixed $value): bool
+    {
+        return filter_var($value, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    private function dispatchToggleEvent(
+        string $organizationId,
+        string $projectId,
+        string $sourceId,
+        bool $enabled,
+    ): void {
+        $event = $enabled
+            ? new SourceEnabled($organizationId, $projectId, $sourceId)
+            : new SourceDisabled($organizationId, $projectId, $sourceId);
+
+        $this->eventBus?->dispatch($event);
     }
 }

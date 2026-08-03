@@ -3,9 +3,10 @@
 namespace App\Modules\Acquisition\Application;
 
 use App\Application\Services\FeatureFlagService;
-use App\Modules\Acquisition\Domain\Contracts\CapabilityGateInterface;
+use App\Modules\Acquisition\Domain\Contracts\CapabilityGateInterface as AcquisitionCapabilityGateInterface;
+use App\Modules\Announcement\Domain\Contracts\CapabilityGateInterface as AnnouncementCapabilityGateInterface;
 
-final class CapabilityGate implements CapabilityGateInterface
+final class CapabilityGate implements AcquisitionCapabilityGateInterface, AnnouncementCapabilityGateInterface
 {
     public const ACQUISITION = 'acquisition';
 

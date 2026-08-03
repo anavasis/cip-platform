@@ -3,8 +3,9 @@
 namespace App\Modules\Acquisition\Domain\Registry;
 
 use App\Modules\Acquisition\Domain\Contracts\ParserHandlerInterface;
+use App\Modules\Announcement\Domain\Contracts\ParserRegistryInterface;
 
-final class ParserRegistry
+final class ParserRegistry implements ParserRegistryInterface
 {
     /** @var array<int, ParserHandlerInterface> */
     private array $parsers = [];

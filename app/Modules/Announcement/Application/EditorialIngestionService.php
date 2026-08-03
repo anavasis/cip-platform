@@ -61,7 +61,11 @@ final class EditorialIngestionService
             return $this->reject('startup_validation_failed', $id);
         }
 
-        $acquisition = $this->sourceAcquisitionService->acquireFromSource($id);
+        $acquisition = $this->sourceAcquisitionService->acquireFromSource(
+            $this->organizationId,
+            $this->projectId,
+            $id,
+        );
 
         if ($acquisition->success() !== true) {
             $errorCode = $acquisition->errorCode() !== ''

@@ -9,8 +9,9 @@ use App\Modules\Acquisition\Domain\Evidence\Evidence;
 use App\Modules\Acquisition\Domain\Evidence\EvidenceRepositoryInterface;
 use App\Modules\Acquisition\Domain\Fingerprint\FingerprintService;
 use App\Modules\Acquisition\Domain\Registry\ParserRegistry;
+use App\Modules\Announcement\Domain\Contracts\IngestionDiagnosticsInterface;
 
-final class AcquisitionDiagnostics
+final class AcquisitionDiagnostics implements IngestionDiagnosticsInterface
 {
     private const EVIDENCE_SUMMARY_LIMIT = 10;
 
@@ -25,6 +26,9 @@ final class AcquisitionDiagnostics
 
     /** @var array<string, mixed>|null */
     private ?array $lastProductionRun = null;
+
+    /** @var array<string, mixed>|null */
+    private ?array $lastIngestion = null;
 
     private int $productionRunsRecorded = 0;
 
@@ -70,6 +74,12 @@ final class AcquisitionDiagnostics
         if (! $result->success()) {
             $this->failureCount++;
         }
+    }
+
+    /** @param array<string, mixed> $data */
+    public function record(array $data): void
+    {
+        $this->lastIngestion = $this->metadataOnly($data);
     }
 
     /** @return array<string, mixed> */
@@ -140,6 +150,28 @@ final class AcquisitionDiagnostics
                 'entries' => array_slice($evidenceSummaries, 0, self::EVIDENCE_SUMMARY_LIMIT),
             ],
             'last_result' => $last,
+            'last_ingestion' => $this->lastIngestion,
         ];
+    }
+
+    /**
+     * @param  array<int|string, mixed>  $data
+     * @return array<int|string, mixed>
+     */
+    private function metadataOnly(array $data): array
+    {
+        foreach ($data as $key => $value) {
+            if (is_string($key) && in_array($key, ['body', 'raw_body', 'evidence_body'], true)) {
+                unset($data[$key]);
+
+                continue;
+            }
+
+            if (is_array($value)) {
+                $data[$key] = $this->metadataOnly($value);
+            }
+        }
+
+        return $data;
     }
 }

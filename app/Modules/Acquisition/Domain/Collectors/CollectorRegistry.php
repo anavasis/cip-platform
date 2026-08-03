@@ -2,7 +2,9 @@
 
 namespace App\Modules\Acquisition\Domain\Collectors;
 
-final class CollectorRegistry
+use App\Modules\Announcement\Domain\Contracts\CollectorRegistryInterface;
+
+final class CollectorRegistry implements CollectorRegistryInterface
 {
     /** @var array<string, CollectorInterface> */
     private array $collectors = [];
