@@ -37,6 +37,8 @@ Announcement
 - Durable ERROR `GenerationResult` after READY request for provider/logical terminal failures.
 - Explicit permanent vs retryable job error codes (`EditorialErrorCodes`); no punctuation-based retry inference.
 - Single `GenerationFailed` ownership: service emits after durable failure commit; job emits fallback only when service did not.
+- Terminal-only job fallback: retryable non-final attempts emit zero `GenerationFailed`; final exhausted / permanent paths emit at most once via durable job-meta marker.
+- Confirmed durable ERROR persistence gate: every required lineage/result `save()` return is checked and the ERROR row is re-read before `failure_event_emitted` / `GenerationFailed`; save false/throw rolls back as `transient_persistence_failure` with no event.
 - Persistence-dependent events dispatched via `DB::afterCommit`.
 - Diagnostics record reuse truthfully and do not treat orchestrator ephemeral stage notes as completions.
 

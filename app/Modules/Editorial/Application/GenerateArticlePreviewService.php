@@ -20,6 +20,7 @@ use App\Modules\Editorial\Domain\GenerationRequest\GenerationRequest;
 use App\Modules\Editorial\Domain\GenerationRequest\GenerationRequestRepositoryInterface;
 use App\Modules\Editorial\Domain\GenerationRequest\GenerationRequestStatus;
 use App\Modules\Editorial\Domain\GenerationResult\EditorialErrorCodes;
+use App\Modules\Editorial\Domain\GenerationResult\EditorialGenerationException;
 use App\Modules\Editorial\Domain\GenerationResult\GenerationResult;
 use App\Modules\Editorial\Domain\GenerationResult\GenerationResultRepositoryInterface;
 use App\Modules\Editorial\Domain\GenerationResult\GenerationResultStatus;
@@ -423,7 +424,7 @@ final class GenerateArticlePreviewService
     }
 
     /**
-     * Persist failure lineage and emit GenerationFailed only after successful commit.
+     * Persist failure lineage and emit GenerationFailed only after confirmed durable ERROR commit.
      *
      * @param  array<string, mixed>  $out
      */
@@ -438,80 +439,117 @@ final class GenerateArticlePreviewService
         ?string $actorId,
         string $correlationId,
     ): bool {
-        $emitted = false;
-        try {
-            DB::transaction(function () use (
-                $organizationId,
-                $projectId,
-                $announcementId,
-                $out,
-                $requestId,
-                $resultId,
-                $errorCode,
-                $actorId,
-                $correlationId,
-                &$emitted,
-            ) {
-                if (isset($out['blueprint'])) {
-                    $this->blueprints->save($organizationId, $projectId, $out['blueprint']);
-                }
-                if (isset($out['context'])) {
-                    $this->contexts->save($organizationId, $projectId, $out['context']);
-                }
-                if (isset($out['package'])) {
-                    $this->packages->save($organizationId, $projectId, $out['package']);
-                }
-                if (isset($out['request'])) {
-                    $this->requests->save($organizationId, $projectId, $out['request']);
-                }
-                if (isset($out['result'])) {
-                    $this->results->save($organizationId, $projectId, $out['result']);
-                }
-
-                $shouldEmit = isset($out['result']) || $requestId !== null;
-                if ($shouldEmit) {
-                    DB::afterCommit(function () use (
-                        $organizationId,
-                        $projectId,
-                        $announcementId,
-                        $requestId,
-                        $resultId,
-                        $errorCode,
-                        $actorId,
-                        $correlationId,
-                    ) {
-                        $this->events->dispatch(new GenerationFailed(
-                            organizationId: $organizationId,
-                            projectId: $projectId,
-                            requestId: $requestId,
-                            resultId: $resultId,
-                            announcementId: $announcementId,
-                            errorCode: $errorCode,
-                            actorId: $actorId,
-                            correlationId: $correlationId,
-                        ));
-                        $this->diagnostics->recordLastGeneration([
-                            'organization_id' => $organizationId,
-                            'project_id' => $projectId,
-                            'announcement_id' => $announcementId,
-                            'ok' => false,
-                            'count' => true,
-                            'error' => $errorCode,
-                            'request_id' => $requestId,
-                            'result_id' => $resultId,
-                            'result_status' => GenerationResultStatus::ERROR,
-                            'correlation_id' => $correlationId,
-                            'preview_available' => false,
-                        ]);
-                    });
-                    $emitted = true;
-                }
-            });
-        } catch (\Throwable) {
+        // Without an ERROR GenerationResult aggregate, the service cannot claim a durable domain failure.
+        if (! isset($out['result']) || ! ($out['result'] instanceof GenerationResult)) {
             return false;
         }
 
+        /** @var GenerationResult $errorResult */
+        $errorResult = $out['result'];
+        $emitted = false;
+
+        DB::transaction(function () use (
+            $organizationId,
+            $projectId,
+            $announcementId,
+            $out,
+            $requestId,
+            $resultId,
+            $errorCode,
+            $actorId,
+            $correlationId,
+            $errorResult,
+            &$emitted,
+        ) {
+            if (isset($out['blueprint'])) {
+                $this->requireSave(
+                    $this->blueprints->save($organizationId, $projectId, $out['blueprint']),
+                );
+            }
+            if (isset($out['context'])) {
+                $this->requireSave(
+                    $this->contexts->save($organizationId, $projectId, $out['context']),
+                );
+            }
+            if (isset($out['package'])) {
+                $this->requireSave(
+                    $this->packages->save($organizationId, $projectId, $out['package']),
+                );
+            }
+            if (isset($out['request'])) {
+                $this->requireSave(
+                    $this->requests->save($organizationId, $projectId, $out['request']),
+                );
+            }
+
+            $this->requireSave(
+                $this->results->save($organizationId, $projectId, $errorResult),
+            );
+
+            $confirmed = $this->results->findById(
+                $organizationId,
+                $projectId,
+                $errorResult->resultId(),
+            );
+            if ($confirmed === null || $confirmed->status() !== GenerationResultStatus::ERROR) {
+                throw EditorialGenerationException::retryable(
+                    EditorialErrorCodes::TRANSIENT_PERSISTENCE_FAILURE,
+                );
+            }
+
+            $durableResultId = $confirmed->resultId();
+            $durableRequestId = $confirmed->requestId() !== '' ? $confirmed->requestId() : $requestId;
+
+            DB::afterCommit(function () use (
+                $organizationId,
+                $projectId,
+                $announcementId,
+                $durableRequestId,
+                $durableResultId,
+                $errorCode,
+                $actorId,
+                $correlationId,
+            ) {
+                $this->events->dispatch(new GenerationFailed(
+                    organizationId: $organizationId,
+                    projectId: $projectId,
+                    requestId: $durableRequestId,
+                    resultId: $durableResultId,
+                    announcementId: $announcementId,
+                    errorCode: $errorCode,
+                    actorId: $actorId,
+                    correlationId: $correlationId,
+                ));
+                $this->diagnostics->recordLastGeneration([
+                    'organization_id' => $organizationId,
+                    'project_id' => $projectId,
+                    'announcement_id' => $announcementId,
+                    'ok' => false,
+                    'count' => true,
+                    'error' => $errorCode,
+                    'request_id' => $durableRequestId,
+                    'result_id' => $durableResultId,
+                    'result_status' => GenerationResultStatus::ERROR,
+                    'correlation_id' => $correlationId,
+                    'preview_available' => false,
+                ]);
+            });
+
+            // Marker for callers: set only after confirmed durable ERROR inside the open transaction.
+            // afterCommit runs only if this transaction commits successfully.
+            $emitted = true;
+        });
+
         return $emitted;
+    }
+
+    private function requireSave(bool $saved): void
+    {
+        if (! $saved) {
+            throw EditorialGenerationException::retryable(
+                EditorialErrorCodes::TRANSIENT_PERSISTENCE_FAILURE,
+            );
+        }
     }
 
     /**

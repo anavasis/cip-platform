@@ -27,4 +27,9 @@ final class EditorialGenerationException extends RuntimeException
     {
         return new self($errorCode, $message !== '' ? $message : $errorCode, $previous);
     }
+
+    public static function retryable(string $errorCode, string $message = '', ?Throwable $previous = null): self
+    {
+        return new self($errorCode, $message !== '' ? $message : $errorCode, $previous);
+    }
 }

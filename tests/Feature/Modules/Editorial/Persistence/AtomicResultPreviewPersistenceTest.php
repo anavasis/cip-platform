@@ -172,6 +172,8 @@ class AtomicResultPreviewPersistenceTest extends TestCase
         $this->app->forgetInstance(GenerateArticlePreviewService::class);
         $this->app->forgetInstance(\App\Modules\Editorial\Application\GenerationOrchestrator::class);
 
+        $beforeFailed = StoredEvent::query()->where('event_type', 'editorial.generation_failed')->count();
+
         $out = app(GenerateArticlePreviewService::class)->generate(
             $organization->id,
             $project->id,
@@ -180,6 +182,7 @@ class AtomicResultPreviewPersistenceTest extends TestCase
         );
 
         $this->assertFalse($out['ok']);
+        $this->assertTrue($out['failure_event_emitted'] ?? false);
         $this->assertNotEmpty($out['result_id']);
         $this->assertDatabaseHas('generation_results', [
             'project_id' => $project->id,
@@ -187,6 +190,10 @@ class AtomicResultPreviewPersistenceTest extends TestCase
             'status' => GenerationResultStatus::ERROR,
         ]);
         $this->assertSame(0, ArticlePreviewModel::query()->where('project_id', $project->id)->count());
+        $this->assertSame(
+            1,
+            StoredEvent::query()->where('event_type', 'editorial.generation_failed')->count() - $beforeFailed,
+        );
     }
 
     public function test_success_commit_emits_persistence_events_once_after_commit(): void
