@@ -27,6 +27,9 @@ interface AnnouncementRepositoryInterface
     public function lastInsertId(): string;
 
     public function markUnchanged(
+        string $organizationId,
+        string $projectId,
+        string $sourceId,
         string $itemId,
         string $lastSeenAtUtc,
         string $updatedAtUtc,
@@ -35,7 +38,13 @@ interface AnnouncementRepositoryInterface
     /**
      * @param  array<string, mixed>  $data
      */
-    public function applyContentUpdate(string $itemId, array $data): bool;
+    public function applyContentUpdate(
+        string $organizationId,
+        string $projectId,
+        string $sourceId,
+        string $itemId,
+        array $data,
+    ): int|false;
 
     /**
      * @param  array<string, mixed>  $criteria

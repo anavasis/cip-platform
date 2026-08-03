@@ -7,7 +7,7 @@ use App\Modules\Announcement\Domain\AnnouncementCandidate;
 use App\Modules\Announcement\Domain\AnnouncementIdentityService;
 use App\Modules\Announcement\Domain\AnnouncementRepositoryInterface;
 use App\Modules\Announcement\Domain\LifecycleOutcome;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 class AnnouncementLifecycleServiceTest extends TestCase
 {
@@ -62,6 +62,43 @@ class AnnouncementLifecycleServiceTest extends TestCase
         $this->assertSame('tenant_context_missing', $result->errorCode());
     }
 
+    public function test_unique_insert_race_is_re_read_and_classified_unchanged(): void
+    {
+        $repository = new InMemoryAnnouncementRepository;
+        $repository->simulateInsertConflict = true;
+        $service = (new AnnouncementLifecycleService(
+            $repository,
+            new AnnouncementIdentityService,
+        ))->forTenant('org-1', 'project-1');
+
+        $result = $service->apply([$this->candidate('source-1', 'Alpha')]);
+
+        $this->assertTrue($result->success());
+        $this->assertSame(0, $result->newCount());
+        $this->assertSame(1, $result->unchangedCount());
+        $this->assertSame(LifecycleOutcome::UNCHANGED, $result->decisions()[0]->outcome());
+        $this->assertSame(1, $repository->markUnchangedCalls);
+    }
+
+    public function test_unique_insert_race_is_re_read_and_classified_updated(): void
+    {
+        $repository = new InMemoryAnnouncementRepository;
+        $repository->simulateInsertConflict = true;
+        $repository->conflictHasDifferentContent = true;
+        $service = (new AnnouncementLifecycleService(
+            $repository,
+            new AnnouncementIdentityService,
+        ))->forTenant('org-1', 'project-1');
+
+        $result = $service->apply([$this->candidate('source-1', 'Alpha')]);
+
+        $this->assertTrue($result->success());
+        $this->assertSame(0, $result->newCount());
+        $this->assertSame(1, $result->updatedCount());
+        $this->assertSame(LifecycleOutcome::UPDATED, $result->decisions()[0]->outcome());
+        $this->assertSame(2, $result->decisions()[0]->revisionNo());
+    }
+
     private function candidate(string $sourceId, string $title): AnnouncementCandidate
     {
         return new AnnouncementCandidate([
@@ -88,12 +125,24 @@ final class InMemoryAnnouncementRepository implements AnnouncementRepositoryInte
 
     public int $contentUpdateCalls = 0;
 
+    public bool $simulateInsertConflict = false;
+
+    public bool $conflictHasDifferentContent = false;
+
     public function insert(array $data): bool
     {
         $this->insertCalls++;
         $this->lastId = sprintf('0198-1111-7222-8333-%012d', count($this->rows) + 10);
         $data['id'] = $this->lastId;
         $this->rows[$this->lastId] = $data;
+
+        if ($this->simulateInsertConflict) {
+            if ($this->conflictHasDifferentContent) {
+                $this->rows[$this->lastId]['content_hash'] = hash('sha256', 'concurrent-content');
+            }
+
+            return false;
+        }
 
         return true;
     }
@@ -123,21 +172,45 @@ final class InMemoryAnnouncementRepository implements AnnouncementRepositoryInte
         return $this->lastId;
     }
 
-    public function markUnchanged(string $itemId, string $lastSeenAtUtc, string $updatedAtUtc): bool
-    {
+    public function markUnchanged(
+        string $organizationId,
+        string $projectId,
+        string $sourceId,
+        string $itemId,
+        string $lastSeenAtUtc,
+        string $updatedAtUtc,
+    ): bool {
         $this->markUnchangedCalls++;
+        if (($this->rows[$itemId]['organization_id'] ?? null) !== $organizationId
+            || ($this->rows[$itemId]['project_id'] ?? null) !== $projectId
+            || ($this->rows[$itemId]['source_id'] ?? null) !== $sourceId) {
+            return false;
+        }
+
         $this->rows[$itemId]['last_seen_at_utc'] = $lastSeenAtUtc;
         $this->rows[$itemId]['updated_at_utc'] = $updatedAtUtc;
 
         return true;
     }
 
-    public function applyContentUpdate(string $itemId, array $data): bool
-    {
+    public function applyContentUpdate(
+        string $organizationId,
+        string $projectId,
+        string $sourceId,
+        string $itemId,
+        array $data,
+    ): int|false {
         $this->contentUpdateCalls++;
+        if (($this->rows[$itemId]['organization_id'] ?? null) !== $organizationId
+            || ($this->rows[$itemId]['project_id'] ?? null) !== $projectId
+            || ($this->rows[$itemId]['source_id'] ?? null) !== $sourceId) {
+            return false;
+        }
+
+        $data['revision_no'] = (int) ($this->rows[$itemId]['revision_no'] ?? 1) + 1;
         $this->rows[$itemId] = array_merge($this->rows[$itemId], $data);
 
-        return true;
+        return $data['revision_no'];
     }
 
     public function findPage(string $organizationId, string $projectId, array $criteria): array

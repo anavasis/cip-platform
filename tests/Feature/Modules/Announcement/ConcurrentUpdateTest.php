@@ -11,7 +11,7 @@ use Tests\TestCase;
 
 class ConcurrentUpdateTest extends TestCase
 {
-    public function test_sequential_updates_observe_latest_hash_and_increment_revision(): void
+    public function test_repeated_updates_observe_latest_hash_and_increment_revision(): void
     {
         ['user' => $owner, 'organization' => $organization] = $this->createUserWithOrg();
         $project = Project::create([

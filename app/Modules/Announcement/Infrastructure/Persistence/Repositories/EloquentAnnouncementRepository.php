@@ -4,6 +4,8 @@ namespace App\Modules\Announcement\Infrastructure\Persistence\Repositories;
 
 use App\Modules\Announcement\Domain\AnnouncementRepositoryInterface;
 use App\Modules\Announcement\Infrastructure\Persistence\Models\Announcement;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Throwable;
 
 final class EloquentAnnouncementRepository implements AnnouncementRepositoryInterface
@@ -15,7 +17,6 @@ final class EloquentAnnouncementRepository implements AnnouncementRepositoryInte
         'raw_title',
         'content_hash',
         'raw_payload',
-        'revision_no',
         'last_seen_at',
     ];
 
@@ -64,7 +65,15 @@ final class EloquentAnnouncementRepository implements AnnouncementRepositoryInte
                 $announcement->updated_at = $data['updated_at_utc'];
             }
 
-            $announcement->save();
+            $announcement->id = (string) Str::uuid();
+            $announcement->created_at ??= now();
+            $announcement->updated_at ??= now();
+            $inserted = Announcement::query()->insertOrIgnore($announcement->getAttributes());
+
+            if ($inserted !== 1) {
+                return false;
+            }
+
             $this->lastInsertId = (string) $announcement->getKey();
 
             return true;
@@ -84,6 +93,7 @@ final class EloquentAnnouncementRepository implements AnnouncementRepositoryInte
             ->where('project_id', $projectId)
             ->where('source_id', $sourceId)
             ->where('identity_hash', $identityHash)
+            ->lockForUpdate()
             ->first();
 
         return $announcement?->toArray();
@@ -95,6 +105,9 @@ final class EloquentAnnouncementRepository implements AnnouncementRepositoryInte
     }
 
     public function markUnchanged(
+        string $organizationId,
+        string $projectId,
+        string $sourceId,
         string $itemId,
         string $lastSeenAtUtc,
         string $updatedAtUtc,
@@ -104,7 +117,13 @@ final class EloquentAnnouncementRepository implements AnnouncementRepositoryInte
         }
 
         try {
-            $announcement = Announcement::query()->whereKey($itemId)->first();
+            $announcement = Announcement::query()
+                ->where('organization_id', $organizationId)
+                ->where('project_id', $projectId)
+                ->where('source_id', $sourceId)
+                ->whereKey($itemId)
+                ->lockForUpdate()
+                ->first();
 
             if ($announcement === null) {
                 return false;
@@ -119,14 +138,24 @@ final class EloquentAnnouncementRepository implements AnnouncementRepositoryInte
         }
     }
 
-    public function applyContentUpdate(string $itemId, array $data): bool
-    {
+    public function applyContentUpdate(
+        string $organizationId,
+        string $projectId,
+        string $sourceId,
+        string $itemId,
+        array $data,
+    ): int|false {
         if (trim($itemId) === '' || $data === []) {
             return false;
         }
 
         try {
-            $announcement = Announcement::query()->whereKey($itemId)->first();
+            $query = Announcement::query()
+                ->where('organization_id', $organizationId)
+                ->where('project_id', $projectId)
+                ->where('source_id', $sourceId)
+                ->whereKey($itemId);
+            $announcement = (clone $query)->lockForUpdate()->first();
 
             if ($announcement === null) {
                 return false;
@@ -138,13 +167,19 @@ final class EloquentAnnouncementRepository implements AnnouncementRepositoryInte
                 return false;
             }
 
-            $announcement->fill($updates);
-
-            if (array_key_exists('updated_at_utc', $data)) {
-                $announcement->updated_at = $data['updated_at_utc'];
+            if (array_key_exists('raw_payload', $updates)) {
+                $encoded = json_encode($updates['raw_payload']);
+                $updates['raw_payload'] = is_string($encoded) ? $encoded : '{}';
             }
 
-            return $announcement->save();
+            $updates['revision_no'] = DB::raw('revision_no + 1');
+            $updates['updated_at'] = $data['updated_at_utc'] ?? now();
+
+            if ((clone $query)->update($updates) !== 1) {
+                return false;
+            }
+
+            return (int) (clone $query)->value('revision_no');
         } catch (Throwable) {
             return false;
         }

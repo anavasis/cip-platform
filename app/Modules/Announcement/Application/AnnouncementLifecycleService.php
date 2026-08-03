@@ -8,6 +8,7 @@ use App\Modules\Announcement\Domain\AnnouncementRepositoryInterface;
 use App\Modules\Announcement\Domain\LifecycleBatchResult;
 use App\Modules\Announcement\Domain\LifecycleDecision;
 use App\Modules\Announcement\Domain\LifecycleOutcome;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Announcement lifecycle decision and persistence spine.
@@ -48,6 +49,17 @@ final class AnnouncementLifecycleService
             ]));
         }
 
+        return DB::transaction(
+            fn (): LifecycleBatchResult => $this->applyInTransaction($candidates),
+            3,
+        );
+    }
+
+    /**
+     * @param  array<int, AnnouncementCandidate>  $candidates
+     */
+    private function applyInTransaction(array $candidates): LifecycleBatchResult
+    {
         $sourceId = '';
         $decisions = [];
         $seenIdentities = [];
@@ -118,7 +130,31 @@ final class AnnouncementLifecycleService
                     'updated_at_utc' => $now,
                 ]);
 
-                if ($inserted !== true) {
+                if ($inserted === true) {
+                    $newCount++;
+                    $decisions[] = new LifecycleDecision([
+                        'outcome' => LifecycleOutcome::NEW_ITEM,
+                        'source_id' => $candidate->sourceId(),
+                        'identity_hash' => $identityHash,
+                        'content_hash' => $contentHash,
+                        'revision_no' => 1,
+                        'item_id' => $this->repository->lastInsertId(),
+                        'title' => $candidate->title(),
+                    ]);
+
+                    continue;
+                }
+
+                // A concurrent insert can win after the initial lookup. Re-read
+                // under lock and classify against the row that actually won.
+                $existing = $this->repository->findBySourceAndIdentityHash(
+                    $this->organizationId,
+                    $this->projectId,
+                    $candidate->sourceId(),
+                    $identityHash,
+                );
+
+                if ($existing === null) {
                     return $this->remember(new LifecycleBatchResult([
                         'success' => false,
                         'error_code' => 'persist_failed',
@@ -131,19 +167,6 @@ final class AnnouncementLifecycleService
                         'decisions' => $decisions,
                     ]));
                 }
-
-                $newCount++;
-                $decisions[] = new LifecycleDecision([
-                    'outcome' => LifecycleOutcome::NEW_ITEM,
-                    'source_id' => $candidate->sourceId(),
-                    'identity_hash' => $identityHash,
-                    'content_hash' => $contentHash,
-                    'revision_no' => 1,
-                    'item_id' => $this->repository->lastInsertId(),
-                    'title' => $candidate->title(),
-                ]);
-
-                continue;
             }
 
             $existingContentHash = isset($existing['content_hash'])
@@ -153,7 +176,27 @@ final class AnnouncementLifecycleService
             $revisionNo = isset($existing['revision_no']) ? (int) $existing['revision_no'] : 1;
 
             if ($existingContentHash !== '' && $existingContentHash === $contentHash) {
-                $this->repository->markUnchanged($itemId, $now, $now);
+                $marked = $this->repository->markUnchanged(
+                    $this->organizationId,
+                    $this->projectId,
+                    $candidate->sourceId(),
+                    $itemId,
+                    $now,
+                    $now,
+                );
+
+                if (! $marked) {
+                    return $this->persistenceFailure(
+                        $candidate,
+                        $candidates,
+                        $newCount,
+                        $updatedCount,
+                        $unchangedCount,
+                        $duplicateCount,
+                        $decisions,
+                    );
+                }
+
                 $unchangedCount++;
                 $decisions[] = new LifecycleDecision([
                     'outcome' => LifecycleOutcome::UNCHANGED,
@@ -168,20 +211,37 @@ final class AnnouncementLifecycleService
                 continue;
             }
 
-            $nextRevision = $revisionNo + 1;
-            $this->repository->applyContentUpdate($itemId, [
-                'source_guid' => $candidate->sourceGuid() !== '' ? $candidate->sourceGuid() : null,
-                'canonical_url' => $candidate->canonicalUrl(),
-                'source_published_at_utc' => $candidate->publishedAtUtc() !== ''
-                    ? $candidate->publishedAtUtc()
-                    : null,
-                'raw_title' => $candidate->title(),
-                'content_hash' => $contentHash,
-                'raw_payload' => $this->encodePayload($candidate->rawPayload()),
-                'revision_no' => $nextRevision,
-                'last_seen_at_utc' => $now,
-                'updated_at_utc' => $now,
-            ]);
+            $nextRevision = $this->repository->applyContentUpdate(
+                $this->organizationId,
+                $this->projectId,
+                $candidate->sourceId(),
+                $itemId,
+                [
+                    'source_guid' => $candidate->sourceGuid() !== '' ? $candidate->sourceGuid() : null,
+                    'canonical_url' => $candidate->canonicalUrl(),
+                    'source_published_at_utc' => $candidate->publishedAtUtc() !== ''
+                        ? $candidate->publishedAtUtc()
+                        : null,
+                    'raw_title' => $candidate->title(),
+                    'content_hash' => $contentHash,
+                    'raw_payload' => $this->encodePayload($candidate->rawPayload()),
+                    'last_seen_at_utc' => $now,
+                    'updated_at_utc' => $now,
+                ],
+            );
+
+            if ($nextRevision === false) {
+                return $this->persistenceFailure(
+                    $candidate,
+                    $candidates,
+                    $newCount,
+                    $updatedCount,
+                    $unchangedCount,
+                    $duplicateCount,
+                    $decisions,
+                );
+            }
+
             $updatedCount++;
             $decisions[] = new LifecycleDecision([
                 'outcome' => LifecycleOutcome::UPDATED,
@@ -246,6 +306,32 @@ final class AnnouncementLifecycleService
             'store' => 'announcements',
             'last_batch' => $last,
         ];
+    }
+
+    /**
+     * @param  array<int, AnnouncementCandidate>  $candidates
+     * @param  array<int, LifecycleDecision>  $decisions
+     */
+    private function persistenceFailure(
+        AnnouncementCandidate $candidate,
+        array $candidates,
+        int $newCount,
+        int $updatedCount,
+        int $unchangedCount,
+        int $duplicateCount,
+        array $decisions,
+    ): LifecycleBatchResult {
+        return $this->remember(new LifecycleBatchResult([
+            'success' => false,
+            'error_code' => 'persist_failed',
+            'source_id' => $candidate->sourceId(),
+            'candidates' => count($candidates),
+            'new_count' => $newCount,
+            'updated_count' => $updatedCount,
+            'unchanged_count' => $unchangedCount,
+            'duplicate_count' => $duplicateCount,
+            'decisions' => $decisions,
+        ]));
     }
 
     private function remember(LifecycleBatchResult $result): LifecycleBatchResult
