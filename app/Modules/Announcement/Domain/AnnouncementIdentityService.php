@@ -45,7 +45,36 @@ final class AnnouncementIdentityService
             return '';
         }
 
-        return strtolower($trimmed);
+        $parsed = parse_url($trimmed);
+
+        if (! is_array($parsed) || ! isset($parsed['scheme'], $parsed['host'])) {
+            return '';
+        }
+
+        $scheme = strtolower((string) $parsed['scheme']);
+        $host = strtolower((string) $parsed['host']);
+
+        if ($scheme === '' || $host === '') {
+            return '';
+        }
+
+        $port = isset($parsed['port']) ? (int) $parsed['port'] : null;
+
+        if (($scheme === 'http' && $port === 80) || ($scheme === 'https' && $port === 443)) {
+            $port = null;
+        }
+
+        $path = isset($parsed['path']) ? (string) $parsed['path'] : '';
+        $path = preg_replace('#/+#', '/', $path) ?? '';
+
+        if ($path !== '/' && str_ends_with($path, '/')) {
+            $path = rtrim($path, '/');
+        }
+
+        return $scheme.'://'.$host
+            .($port !== null ? ':'.$port : '')
+            .$path
+            .(isset($parsed['query']) ? '?'.$parsed['query'] : '');
     }
 
     private function normalizeText(string $text): string
