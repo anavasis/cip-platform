@@ -19,21 +19,31 @@ final class EditorialDiagnostics implements GenerationDiagnosticsSink
         $key = $this->key($organizationId, $projectId);
         $current = $this->byTenant[$key] ?? $this->emptyState($organizationId, $projectId);
 
+        $count = ($payload['count'] ?? true) === true;
+        $reused = ($payload['reused'] ?? false) === true;
         $ok = ($payload['ok'] ?? false) === true;
-        $current['generations_requested'] = (int) $current['generations_requested'] + 1;
-        if ($ok) {
-            $current['generations_completed'] = (int) $current['generations_completed'] + 1;
-            $current['preview_available'] = (bool) ($payload['preview_available'] ?? true);
-        } else {
-            $current['generations_failed'] = (int) $current['generations_failed'] + 1;
-            $current['preview_available'] = false;
-            if (isset($payload['validation_failure_codes']) && is_array($payload['validation_failure_codes'])) {
-                $current['validation_failure_codes'] = array_values(array_filter(
-                    array_map('strval', $payload['validation_failure_codes'])
-                ));
-            } elseif (isset($payload['error']) && is_string($payload['error'])) {
-                $current['validation_failure_codes'] = [$payload['error']];
+
+        if ($count) {
+            $current['generations_requested'] = (int) $current['generations_requested'] + 1;
+            if ($reused) {
+                $current['generations_reused'] = (int) $current['generations_reused'] + 1;
+                $current['preview_available'] = (bool) ($payload['preview_available'] ?? true);
+            } elseif ($ok) {
+                $current['generations_completed'] = (int) $current['generations_completed'] + 1;
+                $current['preview_available'] = (bool) ($payload['preview_available'] ?? false);
+            } else {
+                $current['generations_failed'] = (int) $current['generations_failed'] + 1;
+                $current['preview_available'] = false;
+                if (isset($payload['validation_failure_codes']) && is_array($payload['validation_failure_codes'])) {
+                    $current['validation_failure_codes'] = array_values(array_filter(
+                        array_map('strval', $payload['validation_failure_codes'])
+                    ));
+                } elseif (isset($payload['error']) && is_string($payload['error'])) {
+                    $current['validation_failure_codes'] = [$payload['error']];
+                }
             }
+        } elseif (array_key_exists('preview_available', $payload)) {
+            $current['preview_available'] = (bool) $payload['preview_available'];
         }
 
         if (isset($payload['provider_code'])) {
@@ -62,6 +72,20 @@ final class EditorialDiagnostics implements GenerationDiagnosticsSink
     }
 
     /**
+     * Truthful idempotent reuse recording (not a new completion).
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function recordReuse(array $payload): void
+    {
+        $payload['ok'] = true;
+        $payload['reused'] = true;
+        $payload['count'] = true;
+        $payload['preview_available'] = $payload['preview_available'] ?? true;
+        $this->recordLastGeneration($payload);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function snapshot(string $organizationId, string $projectId): array
@@ -82,6 +106,7 @@ final class EditorialDiagnostics implements GenerationDiagnosticsSink
             'generations_requested' => 0,
             'generations_completed' => 0,
             'generations_failed' => 0,
+            'generations_reused' => 0,
             'last_provider_code' => null,
             'last_model_id' => null,
             'last_duration_ms' => null,

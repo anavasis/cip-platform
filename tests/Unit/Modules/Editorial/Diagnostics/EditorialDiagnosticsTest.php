@@ -39,4 +39,40 @@ class EditorialDiagnosticsTest extends TestCase
         $this->assertStringNotContainsString('SECRET_BODY', $encoded);
         $this->assertStringNotContainsString('SECRET_TEXT', $encoded);
     }
+
+    public function test_reuse_does_not_inflate_completed_and_failures_count_once(): void
+    {
+        $diag = new EditorialDiagnostics;
+        $diag->recordLastGeneration([
+            'organization_id' => 'o1',
+            'project_id' => 'p1',
+            'ok' => true,
+            'preview_available' => true,
+        ]);
+        $diag->recordReuse([
+            'organization_id' => 'o1',
+            'project_id' => 'p1',
+            'preview_available' => true,
+        ]);
+        $diag->recordLastGeneration([
+            'organization_id' => 'o1',
+            'project_id' => 'p1',
+            'ok' => false,
+            'error' => 'provider_error',
+        ]);
+        // ephemeral orchestrator noise must not inflate counters
+        $diag->recordLastGeneration([
+            'organization_id' => 'o1',
+            'project_id' => 'p1',
+            'ok' => false,
+            'count' => false,
+            'error' => 'ignored',
+        ]);
+
+        $snap = $diag->snapshot('o1', 'p1');
+        $this->assertSame(1, $snap['generations_completed']);
+        $this->assertSame(1, $snap['generations_reused']);
+        $this->assertSame(1, $snap['generations_failed']);
+        $this->assertSame(3, $snap['generations_requested']);
+    }
 }

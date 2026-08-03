@@ -86,8 +86,7 @@ class GenerateArticlePreviewJob implements ShouldQueue
             );
 
             if (($result['ok'] ?? false) !== true) {
-                $domainFailureRecorded = ($result['failure_event_emitted'] ?? false) === true
-                    || isset($result['result_id']);
+                $domainFailureRecorded = ($result['failure_event_emitted'] ?? false) === true;
                 $errorCode = (string) ($result['error_code'] ?? $result['error'] ?? EditorialErrorCodes::PROVIDER_ERROR);
                 $errorCode = EditorialErrorCodes::fromMessage($errorCode);
                 throw EditorialGenerationException::permanent($errorCode, $errorCode);

@@ -19,7 +19,7 @@ Announcement
 → BUILD-004 Generation Request + Validator
 → AiProviderInterface (StubAiProvider)
 → BUILD-005 Generation Result + Validator
-→ durable ArticlePreview (SUCCESS only)
+→ durable ArticlePreview (SUCCESS only; service-owned persistence)
 ```
 
 ## Adaptations from Foundation
@@ -30,6 +30,24 @@ Announcement
 - Foundation canonical hash algorithm preserved (json_encode path); fixed-vector tests included.
 - Database uniqueness is project-scoped; hash algorithms do not include `project_id`.
 
+## Pre-merge corrections (PR #4)
+
+- Input-aware non-regenerate reuse (preview↔request↔SUCCESS result + announcement content/revision + stub binding).
+- Atomic SUCCESS `GenerationResult` + `ArticlePreview` persistence in one DB transaction; orchestrator does not persist previews.
+- Durable ERROR `GenerationResult` after READY request for provider/logical terminal failures.
+- Explicit permanent vs retryable job error codes (`EditorialErrorCodes`); no punctuation-based retry inference.
+- Single `GenerationFailed` ownership: service emits after durable failure commit; job emits fallback only when service did not.
+- Persistence-dependent events dispatched via `DB::afterCommit`.
+- Diagnostics record reuse truthfully and do not treat orchestrator ephemeral stage notes as completions.
+
+## Accepted technical debt
+
+- Foundation `uniqid` in blueprint/context IDs keeps raw `package_hash`/`request_hash` unstable across runs; application reuse is input-aware rather than hash-stable.
+- No inter-stage foreign keys between editorial aggregates.
+- In-memory tenant diagnostics (process-local).
+- Hardcoded default announcement language `el` in service mapping.
+- Stages 001–004 are not required to be persisted before provider in this slice.
+
 ## Explicit exclusions
 
 - Delivery / publishing / WordPress `wp_insert_post`
@@ -37,6 +55,7 @@ Announcement
 - Social / newsletter / Hub integrations
 - Recurring generation schedules
 - Mutation of Announcement or Acquisition modules
+- Stable hash redesign / inter-stage FK redesign / durable diagnostics store
 
 ## Module layout
 

@@ -167,6 +167,18 @@ final class GenerateArticlePreviewService
                 $correlationId,
             );
             if ($reuse !== null) {
+                $this->diagnostics->recordReuse([
+                    'organization_id' => $organizationId,
+                    'project_id' => $projectId,
+                    'announcement_id' => $announcementId,
+                    'request_id' => $reuse['request_id'] ?? null,
+                    'result_id' => $reuse['result_id'] ?? null,
+                    'preview_id' => $reuse['preview_id'] ?? null,
+                    'correlation_id' => $correlationId,
+                    'preview_available' => true,
+                    'result_status' => GenerationResultStatus::SUCCESS,
+                ]);
+
                 return $reuse;
             }
         }
@@ -207,7 +219,6 @@ final class GenerateArticlePreviewService
         $out = $this->orchestrator->generateFromAnnouncement($item, $options);
 
         if (($out['ok'] ?? false) !== true) {
-            $this->persistPartial($organizationId, $projectId, $out);
             $requestId = isset($out['request']) ? $out['request']->requestId() : ($out['request_id'] ?? null);
             $resultId = isset($out['result']) ? $out['result']->resultId() : ($out['result_id'] ?? null);
             $errorCode = EditorialErrorCodes::fromMessage(
@@ -216,16 +227,17 @@ final class GenerateArticlePreviewService
                     : (string) ($out['error_code'] ?? $out['error'] ?? EditorialErrorCodes::PROVIDER_ERROR)
             );
 
-            $this->events->dispatch(new GenerationFailed(
-                organizationId: $organizationId,
-                projectId: $projectId,
-                requestId: $requestId,
-                resultId: $resultId,
-                announcementId: $announcementId,
-                errorCode: $errorCode,
-                actorId: $actorId,
-                correlationId: $correlationId,
-            ));
+            $failureEventEmitted = $this->persistFailureAndEmit(
+                $organizationId,
+                $projectId,
+                $announcementId,
+                $out,
+                $requestId,
+                $resultId,
+                $errorCode,
+                $actorId,
+                $correlationId,
+            );
 
             return [
                 'ok' => false,
@@ -236,7 +248,7 @@ final class GenerateArticlePreviewService
                 'request_id' => $requestId,
                 'result_id' => $resultId,
                 'stages' => $out['stages'] ?? [],
-                'failure_event_emitted' => true,
+                'failure_event_emitted' => $failureEventEmitted,
             ];
         }
 
@@ -263,6 +275,18 @@ final class GenerateArticlePreviewService
                     $projectId,
                     $existingPreview->resultId(),
                 );
+
+                $this->diagnostics->recordReuse([
+                    'organization_id' => $organizationId,
+                    'project_id' => $projectId,
+                    'announcement_id' => $announcementId,
+                    'request_id' => $existing->requestId(),
+                    'result_id' => $existingResult?->resultId(),
+                    'preview_id' => $existingPreview->previewId(),
+                    'correlation_id' => $correlationId,
+                    'preview_available' => true,
+                    'result_status' => GenerationResultStatus::SUCCESS,
+                ]);
 
                 return [
                     'ok' => true,
@@ -357,10 +381,27 @@ final class GenerateArticlePreviewService
                 ),
             ];
 
-            DB::afterCommit(function () use ($pendingEvents) {
+            DB::afterCommit(function () use ($pendingEvents, $organizationId, $projectId, $announcementId, $out, $correlationId) {
                 foreach ($pendingEvents as $event) {
                     $this->events->dispatch($event);
                 }
+                $this->diagnostics->recordLastGeneration([
+                    'organization_id' => $organizationId,
+                    'project_id' => $projectId,
+                    'announcement_id' => $announcementId,
+                    'ok' => true,
+                    'count' => true,
+                    'reused' => false,
+                    'preview_available' => true,
+                    'request_id' => $out['request_id'] ?? null,
+                    'result_id' => $out['result_id'] ?? null,
+                    'preview_id' => $out['preview_id'] ?? null,
+                    'blueprint_id' => $out['blueprint_id'] ?? null,
+                    'result_status' => GenerationResultStatus::SUCCESS,
+                    'correlation_id' => $correlationId,
+                    'model_id' => 'smce.stub.deterministic',
+                    'provider_code' => 'stub.deterministic',
+                ]);
             });
         });
 
@@ -382,12 +423,35 @@ final class GenerateArticlePreviewService
     }
 
     /**
+     * Persist failure lineage and emit GenerationFailed only after successful commit.
+     *
      * @param  array<string, mixed>  $out
      */
-    private function persistPartial(string $organizationId, string $projectId, array $out): void
-    {
+    private function persistFailureAndEmit(
+        string $organizationId,
+        string $projectId,
+        string $announcementId,
+        array $out,
+        ?string $requestId,
+        ?string $resultId,
+        string $errorCode,
+        ?string $actorId,
+        string $correlationId,
+    ): bool {
+        $emitted = false;
         try {
-            DB::transaction(function () use ($organizationId, $projectId, $out) {
+            DB::transaction(function () use (
+                $organizationId,
+                $projectId,
+                $announcementId,
+                $out,
+                $requestId,
+                $resultId,
+                $errorCode,
+                $actorId,
+                $correlationId,
+                &$emitted,
+            ) {
                 if (isset($out['blueprint'])) {
                     $this->blueprints->save($organizationId, $projectId, $out['blueprint']);
                 }
@@ -403,10 +467,51 @@ final class GenerateArticlePreviewService
                 if (isset($out['result'])) {
                     $this->results->save($organizationId, $projectId, $out['result']);
                 }
+
+                $shouldEmit = isset($out['result']) || $requestId !== null;
+                if ($shouldEmit) {
+                    DB::afterCommit(function () use (
+                        $organizationId,
+                        $projectId,
+                        $announcementId,
+                        $requestId,
+                        $resultId,
+                        $errorCode,
+                        $actorId,
+                        $correlationId,
+                    ) {
+                        $this->events->dispatch(new GenerationFailed(
+                            organizationId: $organizationId,
+                            projectId: $projectId,
+                            requestId: $requestId,
+                            resultId: $resultId,
+                            announcementId: $announcementId,
+                            errorCode: $errorCode,
+                            actorId: $actorId,
+                            correlationId: $correlationId,
+                        ));
+                        $this->diagnostics->recordLastGeneration([
+                            'organization_id' => $organizationId,
+                            'project_id' => $projectId,
+                            'announcement_id' => $announcementId,
+                            'ok' => false,
+                            'count' => true,
+                            'error' => $errorCode,
+                            'request_id' => $requestId,
+                            'result_id' => $resultId,
+                            'result_status' => GenerationResultStatus::ERROR,
+                            'correlation_id' => $correlationId,
+                            'preview_available' => false,
+                        ]);
+                    });
+                    $emitted = true;
+                }
             });
         } catch (\Throwable) {
-            // best-effort persistence of error path
+            return false;
         }
+
+        return $emitted;
     }
 
     /**

@@ -394,6 +394,7 @@ final class GenerationOrchestrator
             $stages['preview_stored'] = false;
 
             $this->diagnostics->recordLastGeneration([
+                'count' => false,
                 'at' => $now,
                 'ok' => true,
                 'organization_id' => $organizationId,
@@ -429,6 +430,7 @@ final class GenerationOrchestrator
         } catch (\Throwable $e) {
             $code = EditorialErrorCodes::fromMessage($e->getMessage());
             $this->diagnostics->recordLastGeneration([
+                'count' => false,
                 'at' => $this->utcNow(),
                 'ok' => false,
                 'organization_id' => $organizationId,
@@ -523,6 +525,7 @@ final class GenerationOrchestrator
         string $now,
     ): array {
         $this->diagnostics->recordLastGeneration([
+                'count' => false,
             'at' => $now,
             'ok' => false,
             'organization_id' => $organizationId,
