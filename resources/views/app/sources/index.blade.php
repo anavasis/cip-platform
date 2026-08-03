@@ -6,6 +6,10 @@
     <h1 class="font-[family-name:var(--font-display)] text-3xl font-bold">Sources</h1>
     <a class="cip-btn" href="{{ route('app.sources.create') }}">New source</a>
 </div>
+<p class="mb-4 text-sm text-slate-600">
+    Disable is the normal safe action for sources that should stop acquiring.
+    Delete is allowed only for unused sources with no announcements, acquisition history, or editorial artifacts.
+</p>
 <div class="cip-card overflow-x-auto">
 <table class="cip-table">
 <thead><tr><th>Name</th><th>Type</th><th>Enabled</th><th>Manual</th><th>Check</th><th>Interval</th><th></th></tr></thead>
@@ -28,7 +32,7 @@
         <form class="inline" method="POST" action="{{ route('app.sources.run', $id) }}">@csrf<button class="underline">Run</button></form>
         <form class="inline" method="POST" action="{{ route('app.sources.check', $id) }}">@csrf<button class="underline">Test</button></form>
         <form class="inline" method="POST" action="{{ route((is_array($row) ? ($row['enabled'] ?? false) : $row->enabled) ? 'app.sources.disable' : 'app.sources.enable', $id) }}">@csrf<button class="underline">{{ (is_array($row) ? ($row['enabled'] ?? false) : $row->enabled) ? 'Disable' : 'Enable' }}</button></form>
-        <form class="inline" method="POST" action="{{ route('app.sources.destroy', $id) }}" onsubmit="return confirm('Delete this source?')">@csrf @method('DELETE')<button class="underline text-red-700">Delete</button></form>
+        <form class="inline" method="POST" action="{{ route('app.sources.destroy', $id) }}" onsubmit="return confirm('Delete only unused sources. Prefer Disable if this source has history. Continue?')">@csrf @method('DELETE')<button class="underline text-red-700">Delete</button></form>
     </td>
 </tr>
 @empty

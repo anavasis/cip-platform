@@ -8,7 +8,10 @@ use App\Modules\Acquisition\Application\SourceRegistryService;
 use App\Modules\Acquisition\Domain\Sources\SourceRepositoryInterface;
 use App\Modules\Acquisition\Infrastructure\Jobs\AcquireSourceJob;
 use App\Modules\Acquisition\Infrastructure\Jobs\SourceConnectivityCheckJob;
+use App\Modules\Acquisition\Infrastructure\Persistence\Models\AcquisitionRunItem;
 use App\Modules\Acquisition\Infrastructure\Persistence\Models\Source;
+use App\Modules\Announcement\Infrastructure\Persistence\Models\Announcement;
+use App\Modules\Editorial\Infrastructure\Persistence\Models\GenerationResultModel;
 use App\Support\OperatorContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -93,9 +96,58 @@ class SourceWebController extends Controller
     public function destroy(Source $source): RedirectResponse
     {
         $this->assertTenant($source);
+
+        if ($this->hasOperationalDependencies($source)) {
+            return back()->withErrors([
+                'form' => 'This source cannot be deleted because it has operational history (announcements, acquisition runs, or editorial artifacts). Disable the source instead.',
+            ]);
+        }
+
         $source->delete();
 
         return redirect()->route('app.sources.index')->with('status', 'Source deleted.');
+    }
+
+    private function hasOperationalDependencies(Source $source): bool
+    {
+        $org = OperatorContext::organization();
+        $project = OperatorContext::project();
+        $orgId = (string) $org->id;
+        $projectId = (string) $project->id;
+        $sourceId = (string) $source->id;
+
+        if (Announcement::query()
+            ->where('organization_id', $orgId)
+            ->where('project_id', $projectId)
+            ->where('source_id', $sourceId)
+            ->exists()) {
+            return true;
+        }
+
+        if (AcquisitionRunItem::query()
+            ->where('organization_id', $orgId)
+            ->where('project_id', $projectId)
+            ->where('source_id', $sourceId)
+            ->exists()) {
+            return true;
+        }
+
+        // Editorial artifacts are reachable through announcements in this tenant.
+        $announcementIds = Announcement::query()
+            ->where('organization_id', $orgId)
+            ->where('project_id', $projectId)
+            ->where('source_id', $sourceId)
+            ->pluck('id');
+        if ($announcementIds->isNotEmpty()
+            && GenerationResultModel::query()
+                ->where('organization_id', $orgId)
+                ->where('project_id', $projectId)
+                ->whereIn('announcement_id', $announcementIds)
+                ->exists()) {
+            return true;
+        }
+
+        return false;
     }
 
     public function enable(Source $source): RedirectResponse
