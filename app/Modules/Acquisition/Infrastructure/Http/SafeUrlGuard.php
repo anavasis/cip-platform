@@ -4,7 +4,7 @@ namespace App\Modules\Acquisition\Infrastructure\Http;
 
 use Closure;
 
-final class SafeUrlGuard
+class SafeUrlGuard
 {
     private const IPV4_BLOCKED_CIDRS = [
         '0.0.0.0/8',
@@ -317,7 +317,7 @@ final class SafeUrlGuard
         return array_values($unique);
     }
 
-    private function isPublicIpAddress(string $address): bool
+    protected function isPublicIpAddress(string $address): bool
     {
         $address = strtolower(trim($address));
 

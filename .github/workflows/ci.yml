@@ -19,8 +19,11 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: mbstring, pdo_sqlite, pdo_pgsql, redis, bcmath
+          extensions: mbstring, curl, pdo_sqlite, pdo_pgsql, redis, bcmath
           coverage: none
+
+      - name: Verify cURL extension
+        run: php -m | grep -i '^curl$'
 
       - name: Validate Composer files
         run: composer validate --strict
@@ -66,8 +69,11 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: mbstring, pdo_pgsql, redis, bcmath, pcntl
+          extensions: mbstring, curl, pdo_pgsql, redis, bcmath, pcntl
           coverage: none
+
+      - name: Verify cURL extension
+        run: php -m | grep -i '^curl$'
 
       - name: Validate Composer files
         run: composer validate --strict
