@@ -4,6 +4,10 @@ namespace App\Modules\Announcement\Domain;
 
 /**
  * Item-level identity and content fingerprinting.
+ * Distinct from feed-level FingerprintService hashes.
+ *
+ * Hash algorithm preserved from editorial-foundation
+ * (cc21d03025e138a627a8a2d58e67412da393f7f5).
  */
 final class AnnouncementIdentityService
 {
@@ -45,36 +49,7 @@ final class AnnouncementIdentityService
             return '';
         }
 
-        $parsed = parse_url($trimmed);
-
-        if (! is_array($parsed) || ! isset($parsed['scheme'], $parsed['host'])) {
-            return '';
-        }
-
-        $scheme = strtolower((string) $parsed['scheme']);
-        $host = strtolower((string) $parsed['host']);
-
-        if ($scheme === '' || $host === '') {
-            return '';
-        }
-
-        $port = isset($parsed['port']) ? (int) $parsed['port'] : null;
-
-        if (($scheme === 'http' && $port === 80) || ($scheme === 'https' && $port === 443)) {
-            $port = null;
-        }
-
-        $path = isset($parsed['path']) ? (string) $parsed['path'] : '';
-        $path = preg_replace('#/+#', '/', $path) ?? '';
-
-        if ($path !== '/' && str_ends_with($path, '/')) {
-            $path = rtrim($path, '/');
-        }
-
-        return $scheme.'://'.$host
-            .($port !== null ? ':'.$port : '')
-            .$path
-            .(isset($parsed['query']) ? '?'.$parsed['query'] : '');
+        return strtolower($trimmed);
     }
 
     private function normalizeText(string $text): string

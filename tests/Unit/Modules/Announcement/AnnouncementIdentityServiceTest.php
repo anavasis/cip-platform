@@ -20,18 +20,19 @@ class AnnouncementIdentityServiceTest extends TestCase
 
     public function test_identity_hash_is_sha256_of_normalized_url(): void
     {
-        $url = ' HTTPS://Example.COM:443/news/item/?page=1#section ';
+        $url = ' HTTPS://Example.COM/news/item ';
         $normalized = $this->identity->normalizeUrl($url);
 
-        $this->assertSame('https://example.com/news/item?page=1', $normalized);
+        $this->assertSame('https://example.com/news/item', $normalized);
         $this->assertSame(hash('sha256', $normalized), $this->identity->identityHash($url));
         $this->assertSame(AnnouncementIdentityService::IDENTITY_BASIS_CANONICAL_URL, $this->identity->identityBasis());
     }
 
-    public function test_normalize_url_canonicalizes_scheme_host_port_path_and_fragment(): void
+    public function test_normalize_url_trims_and_lowercases_preserving_foundation_algorithm(): void
     {
+        // Foundation algorithm: trim + strtolower only (no path/port/fragment rewriting).
         $this->assertSame(
-            'http://example.com/News/Item?b=2&a=1',
+            'http://example.com:80//news//item/?b=2&a=1#fragment',
             $this->identity->normalizeUrl('HTTP://EXAMPLE.COM:80//News//Item/?b=2&a=1#fragment'),
         );
         $this->assertSame('', $this->identity->normalizeUrl('   '));
