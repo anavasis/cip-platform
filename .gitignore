@@ -1,0 +1,42 @@
+# Secrets and environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials/
+secrets/
+
+# Dependencies and build
+node_modules/
+vendor/
+dist/
+build/
+out/
+coverage/
+.turbo/
+.next/
+*.tsbuildinfo
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Runtime / local
+*.log
+tmp/
+.cache/
+data/local/
+
+# Language toolchains (local)
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+target/
+bin/
+obj/
