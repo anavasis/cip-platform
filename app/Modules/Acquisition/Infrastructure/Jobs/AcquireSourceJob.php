@@ -5,12 +5,15 @@ namespace App\Modules\Acquisition\Infrastructure\Jobs;
 use App\Application\Services\EventBusService;
 use App\Application\Services\JobEngineService;
 use App\Infrastructure\Persistence\Models\PlatformJob;
+use App\Modules\Acquisition\Application\AcquisitionRunTerminalizer;
 use App\Modules\Acquisition\Application\CapabilityGate;
 use App\Modules\Acquisition\Application\ProductionAcquisitionOrchestrator;
+use App\Modules\Acquisition\Domain\AcquisitionRunTerminalizationException;
 use App\Modules\Acquisition\Domain\Events\AcquisitionRunCompleted;
 use App\Modules\Acquisition\Domain\Events\AcquisitionRunFailed;
 use App\Modules\Acquisition\Domain\Events\AcquisitionRunStarted;
 use App\Modules\Acquisition\Domain\Sources\SourceRepositoryInterface;
+use App\Modules\Acquisition\Infrastructure\Persistence\Models\AcquisitionRun;
 use App\Modules\Acquisition\Infrastructure\Persistence\Models\Source;
 use App\Modules\Acquisition\Infrastructure\Persistence\Repositories\EloquentAcquisitionRunRepository;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -35,6 +38,7 @@ class AcquireSourceJob implements ShouldQueue
         EloquentAcquisitionRunRepository $runs,
         SourceRepositoryInterface $sources,
         CapabilityGate $capabilityGate,
+        AcquisitionRunTerminalizer $terminalizer,
     ): void {
         $job = PlatformJob::findOrFail($this->platformJobId);
         $job->forceFill(['error' => null, 'completed_at' => null])->save();
@@ -176,20 +180,14 @@ class AcquireSourceJob implements ShouldQueue
                 throw new RuntimeException($errorCode);
             }
 
-            $updated = $runs->updateRun($runId, [
-                'organization_id' => $organizationId,
-                'project_id' => $projectId,
-                'status' => 'completed',
+            $terminalizer->ensureTerminal($runId, $organizationId, $projectId, 'completed', [
                 'error_code' => null,
                 'sources_requested' => $sourcesRequested,
                 'sources_succeeded' => $sourcesSucceeded,
                 'sources_failed' => $sourcesFailed,
                 'duration_ms' => $durationMs,
             ]);
-
-            if (! $updated) {
-                throw new RuntimeException('run_update_failed');
-            }
+            $terminalized = true;
 
             $sources->update($sourceId, [
                 'organization_id' => $organizationId,
@@ -206,7 +204,10 @@ class AcquireSourceJob implements ShouldQueue
                 $durationMs,
             ));
             $jobEngine->markCompleted($job, $result->toArray());
-            $terminalized = true;
+        } catch (AcquisitionRunTerminalizationException $terminalizationException) {
+            $jobEngine->markFailed($job, 'run_terminalization_failed');
+
+            throw $terminalizationException;
         } catch (Throwable $throwable) {
             $errorCode = $this->exceptionErrorCode($throwable);
             $sourcesFailed = max($sourcesFailed, $sourcesRequested);
@@ -230,38 +231,28 @@ class AcquireSourceJob implements ShouldQueue
             }
 
             if ($storedRunId !== false && ! $terminalized) {
-                $terminalized = $runs->updateRun($runId, [
-                    'organization_id' => $organizationId,
-                    'project_id' => $projectId,
-                    'status' => 'failed',
+                $terminalizer->ensureTerminal($runId, $organizationId, $projectId, 'failed', [
                     'error_code' => $errorCode,
                     'sources_requested' => $sourcesRequested,
                     'sources_succeeded' => $sourcesSucceeded,
                     'sources_failed' => $sourcesFailed,
                     'duration_ms' => $durationMs,
                 ]);
-
-                if (! $terminalized) {
-                    $errorCode = 'run_update_failed';
-                }
+                $terminalized = true;
             }
 
-            if ($storedRunId !== false && ! $failureEventEmitted) {
-                $failureEventEmitted = true;
-
-                try {
-                    $eventBus->dispatch(new AcquisitionRunFailed(
-                        $organizationId,
-                        $projectId,
-                        $runId,
-                        $errorCode,
-                        $sourcesRequested,
-                        $durationMs,
-                    ));
-                } catch (Throwable) {
-                    // Run and platform job rows remain the durable signals.
-                }
-            }
+            $failureEventEmitted = $this->dispatchFailureEventOnce(
+                $eventBus,
+                $runs,
+                $organizationId,
+                $projectId,
+                $runId,
+                $storedRunId !== false,
+                $failureEventEmitted,
+                $errorCode,
+                $sourcesRequested,
+                $durationMs,
+            );
 
             $jobEngine->markFailed($job, $errorCode);
 
@@ -270,21 +261,86 @@ class AcquireSourceJob implements ShouldQueue
             }
         } finally {
             if ($storedRunId !== false && ! $terminalized) {
-                $runs->updateRun($runId, [
-                    'organization_id' => $organizationId,
-                    'project_id' => $projectId,
-                    'status' => 'failed',
-                    'error_code' => $errorCode,
-                    'sources_requested' => $sourcesRequested,
-                    'sources_succeeded' => $sourcesSucceeded,
-                    'sources_failed' => max($sourcesFailed, $sourcesRequested),
-                    'duration_ms' => max($durationMs, (microtime(true) - $startedAt) * 1000),
-                ]);
+                try {
+                    $terminalizer->ensureTerminal($runId, $organizationId, $projectId, 'failed', [
+                        'error_code' => $errorCode !== '' ? $errorCode : 'acquisition_job_failed',
+                        'sources_requested' => $sourcesRequested,
+                        'sources_succeeded' => $sourcesSucceeded,
+                        'sources_failed' => max($sourcesFailed, $sourcesRequested),
+                        'duration_ms' => max($durationMs, (microtime(true) - $startedAt) * 1000),
+                    ]);
+                } catch (AcquisitionRunTerminalizationException $terminalizationException) {
+                    if ($lockAcquired) {
+                        $sourceLock?->release();
+                    }
+
+                    throw $terminalizationException;
+                }
             }
 
             if ($lockAcquired) {
                 $sourceLock?->release();
             }
+        }
+    }
+
+    public function failed(?Throwable $exception): void
+    {
+        try {
+            $job = PlatformJob::query()->find($this->platformJobId);
+
+            if ($job === null) {
+                return;
+            }
+
+            $organizationId = trim((string) ($job->organization_id ?? ''));
+            $projectId = trim((string) ($job->project_id ?? ''));
+
+            if ($organizationId === '' || $projectId === '') {
+                return;
+            }
+
+            $run = $this->findRunningRunForPlatformJob($organizationId, $projectId, (string) $job->id);
+
+            if ($run === null) {
+                return;
+            }
+
+            $errorCode = $exception instanceof AcquisitionRunTerminalizationException
+                ? 'run_terminalization_failed'
+                : $this->exceptionErrorCode($exception ?? new RuntimeException('acquisition_job_failed'));
+            $runs = app(EloquentAcquisitionRunRepository::class);
+            $terminalizer = app(AcquisitionRunTerminalizer::class);
+            $eventBus = app(EventBusService::class);
+
+            $terminalizer->ensureTerminal(
+                (string) $run->run_id,
+                $organizationId,
+                $projectId,
+                'failed',
+                [
+                    'error_code' => $errorCode,
+                    'sources_requested' => (int) $run->sources_requested,
+                    'sources_succeeded' => (int) $run->sources_succeeded,
+                    'sources_failed' => max((int) $run->sources_failed, (int) $run->sources_requested),
+                    'duration_ms' => $run->duration_ms,
+                ],
+            );
+
+            $this->dispatchFailureEventOnce(
+                $eventBus,
+                $runs,
+                $organizationId,
+                $projectId,
+                (string) $run->run_id,
+                true,
+                false,
+                $errorCode,
+                (int) $run->sources_requested,
+                (float) ($run->duration_ms ?? 0),
+            );
+        } catch (Throwable) {
+            // failed() must not throw; durable rows remain the signal.
         }
     }
 
@@ -319,6 +375,10 @@ class AcquireSourceJob implements ShouldQueue
 
     private function isRetryable(string $errorCode, Throwable $throwable): bool
     {
+        if ($throwable instanceof AcquisitionRunTerminalizationException) {
+            return false;
+        }
+
         if (in_array($errorCode, [
             'capability_disabled',
             'invalid_payload',
@@ -343,5 +403,75 @@ class AcquireSourceJob implements ShouldQueue
         }
 
         return ! $throwable instanceof RuntimeException;
+    }
+
+    private function dispatchFailureEventOnce(
+        EventBusService $eventBus,
+        EloquentAcquisitionRunRepository $runs,
+        string $organizationId,
+        string $projectId,
+        string $runId,
+        bool $runExists,
+        bool $alreadyEmitted,
+        string $errorCode,
+        int $sourcesRequested,
+        float $durationMs,
+    ): bool {
+        if ($alreadyEmitted || ! $runExists || $runId === '') {
+            return $alreadyEmitted;
+        }
+
+        $current = $runs->findByRunId($organizationId, $projectId, $runId);
+        $meta = is_array($current['meta'] ?? null) ? $current['meta'] : [];
+
+        if (($meta['failure_event_emitted'] ?? false) === true) {
+            return true;
+        }
+
+        try {
+            $eventBus->dispatch(new AcquisitionRunFailed(
+                $organizationId,
+                $projectId,
+                $runId,
+                $errorCode,
+                $sourcesRequested,
+                $durationMs,
+            ));
+        } catch (Throwable) {
+            return false;
+        }
+
+        $meta['failure_event_emitted'] = true;
+        $runs->updateRun($runId, [
+            'organization_id' => $organizationId,
+            'project_id' => $projectId,
+            'meta' => $meta,
+        ]);
+
+        return true;
+    }
+
+    private function findRunningRunForPlatformJob(
+        string $organizationId,
+        string $projectId,
+        string $platformJobId,
+    ): ?AcquisitionRun {
+        $candidates = AcquisitionRun::query()
+            ->where('organization_id', $organizationId)
+            ->where('project_id', $projectId)
+            ->where('status', 'running')
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get();
+
+        foreach ($candidates as $candidate) {
+            $meta = is_array($candidate->meta) ? $candidate->meta : [];
+
+            if ((string) ($meta['platform_job_id'] ?? '') === $platformJobId) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 }

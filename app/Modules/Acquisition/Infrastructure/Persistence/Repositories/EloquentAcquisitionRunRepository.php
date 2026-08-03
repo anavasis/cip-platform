@@ -6,7 +6,7 @@ use App\Modules\Acquisition\Infrastructure\Persistence\Models\AcquisitionRun;
 use App\Modules\Acquisition\Infrastructure\Persistence\Models\AcquisitionRunItem;
 use Throwable;
 
-final class EloquentAcquisitionRunRepository
+class EloquentAcquisitionRunRepository
 {
     private const RUN_UPDATE_COLUMNS = [
         'status',
@@ -81,6 +81,24 @@ final class EloquentAcquisitionRunRepository
 
             if ($run === null || $updates === []) {
                 return false;
+            }
+
+            $currentStatus = (string) $run->status;
+            $nextStatus = array_key_exists('status', $updates)
+                ? (string) $updates['status']
+                : $currentStatus;
+
+            if (in_array($currentStatus, ['completed', 'failed'], true)
+                && $nextStatus === 'running') {
+                return false;
+            }
+
+            if (in_array($currentStatus, ['completed', 'failed'], true)
+                && in_array($nextStatus, ['completed', 'failed'], true)
+                && $nextStatus === $currentStatus
+                && count($updates) === 1
+                && array_key_exists('status', $updates)) {
+                return true;
             }
 
             if (array_key_exists('meta', $updates)) {
