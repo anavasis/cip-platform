@@ -32,8 +32,11 @@ EDITORIAL_AI_DRIVER=openai
 OPENAI_MODEL=gpt-5
 OPENAI_TIMEOUT_SECONDS=60
 # Prefer project-scoped secret `openai_api_key` via Settings UI / Setup wizard.
-# Optional bootstrap fallback:
+# Optional bootstrap fallback (config/editorial.php → editorial.ai.openai.api_key):
 # OPENAI_API_KEY=
+#
+# GPT-5 reasoning models: the OpenAI provider omits temperature automatically.
+# Temperature is sent only for temperature-capable chat models (e.g. gpt-5-chat-latest).
 ```
 
 Validate before cutover:
@@ -115,9 +118,16 @@ Never enable debug logging of provider prompts or secret values.
 2. Restore DB dump only if a forward migration is incompatible (this UI milestone adds no schema migrations).
 3. Restart php-fpm, queue workers, and verify `/up`.
 
+## Diagnostics notes
+
+- Platform health checks (`/api/v1/diagnostics/health`, operator Diagnostics page) are infrastructure-level.
+- Operator “Failed events” on the Diagnostics page are scoped to the selected organization/project via StoredEvent payload fields. Events without verifiable tenant context are hidden.
+- Disable public `POST /api/v1/auth/register` at the edge (or after first bootstrap) so anonymous registration cannot preempt `/setup`.
+
 ## First operator path
 
 1. Open `/setup` (empty database) or `/login`.
 2. Create org/project/admin and optional OpenAI key + first source.
 3. Enable editorial/acquisition flags in Settings if needed.
 4. Run acquisition → open announcement → Generate → Preview → Copy → Logout.
+5. Prefer Disable over Delete for sources that already have operational history.

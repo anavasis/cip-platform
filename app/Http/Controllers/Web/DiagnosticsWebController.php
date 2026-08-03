@@ -11,6 +11,7 @@ use App\Modules\Acquisition\Infrastructure\Persistence\Models\AcquisitionRun;
 use App\Modules\Editorial\Application\EditorialDiagnostics;
 use App\Modules\Editorial\Infrastructure\Persistence\Models\GenerationResultModel;
 use App\Support\OperatorContext;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 class DiagnosticsWebController extends Controller
@@ -49,11 +50,46 @@ class DiagnosticsWebController extends Controller
                 ->orderByDesc('created_at')
                 ->limit(25)
                 ->get(),
-            'recentFailedEvents' => StoredEvent::query()
-                ->where('event_type', 'like', '%failed%')
-                ->orderByDesc('occurred_at')
-                ->limit(25)
-                ->get(),
+            'recentFailedEvents' => $this->tenantFailedEvents((string) $org->id, (string) $project->id),
         ]);
+    }
+
+    /**
+     * @return Collection<int, array{event_type: string, occurred_at: mixed, error_code: string|null}>
+     */
+    private function tenantFailedEvents(string $organizationId, string $projectId): Collection
+    {
+        return StoredEvent::query()
+            ->where('event_type', 'like', '%failed%')
+            ->where('payload->organization_id', $organizationId)
+            ->where('payload->project_id', $projectId)
+            ->orderByDesc('occurred_at')
+            ->limit(50)
+            ->get()
+            ->filter(function (StoredEvent $event) use ($organizationId, $projectId): bool {
+                $payload = is_array($event->payload) ? $event->payload : [];
+                $eventOrg = (string) ($payload['organization_id'] ?? '');
+                $eventProject = (string) ($payload['project_id'] ?? '');
+
+                // Events without verifiable tenant context are never displayed.
+                return $eventOrg !== ''
+                    && $eventProject !== ''
+                    && $eventOrg === $organizationId
+                    && $eventProject === $projectId;
+            })
+            ->take(25)
+            ->values()
+            ->map(static function (StoredEvent $event): array {
+                $payload = is_array($event->payload) ? $event->payload : [];
+
+                // Render only safe metadata — never prompt/body/secret/raw provider material.
+                return [
+                    'event_type' => (string) $event->event_type,
+                    'occurred_at' => $event->occurred_at,
+                    'error_code' => isset($payload['error_code']) && is_string($payload['error_code'])
+                        ? $payload['error_code']
+                        : null,
+                ];
+            });
     }
 }

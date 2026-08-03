@@ -24,9 +24,18 @@
 <table class="cip-table"><thead><tr><th>Job</th><th>Error</th></tr></thead><tbody>
 @foreach($queueFailures as $f)<tr><td>{{ $f->job_type }}</td><td>{{ $f->error }}</td></tr>@endforeach
 </tbody></table></div>
-<div class="cip-card"><h2 class="mb-2 font-semibold">Failed events</h2>
-<table class="cip-table"><thead><tr><th>Type</th><th>When</th></tr></thead><tbody>
-@foreach($recentFailedEvents as $f)<tr><td>{{ $f->event_type }}</td><td>{{ $f->occurred_at }}</td></tr>@endforeach
-</tbody></table></div>
+<div class="cip-card"><h2 class="mb-2 font-semibold">Failed events (this project)</h2>
+<table class="cip-table"><thead><tr><th>Type</th><th>Error</th><th>When</th></tr></thead><tbody>
+@forelse($recentFailedEvents as $f)
+<tr>
+<td>{{ $f['event_type'] }}</td>
+<td>{{ $f['error_code'] ?? '' }}</td>
+<td>{{ $f['occurred_at'] }}</td>
+</tr>
+@empty
+<tr><td colspan="3">No tenant-scoped failed events.</td></tr>
+@endforelse
+</tbody></table>
+</div>
 </div>
 @endsection
