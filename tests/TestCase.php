@@ -20,6 +20,7 @@ abstract class TestCase extends BaseTestCase
     {
         parent::setUp();
         $this->seed(DatabaseSeeder::class);
+        $this->withoutVite();
     }
 
     protected function createUserWithOrg(string $roleName = 'owner'): array

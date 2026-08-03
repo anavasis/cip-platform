@@ -6,6 +6,125 @@
 @source '../**/*.js';
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-sans: 'Source Sans 3', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+    --font-display: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+    --color-ink: #102a43;
+    --color-panel: #f5f7fa;
+    --color-accent: #0f766e;
+    --color-accent-strong: #115e59;
+    --color-line: #d9e2ec;
+    --color-warn: #b45309;
+    --color-danger: #b91c1c;
+}
+
+html[data-theme='dark'] {
+    --color-ink: #e2e8f0;
+    --color-panel: #0f172a;
+    --color-accent: #14b8a6;
+    --color-accent-strong: #2dd4bf;
+    --color-line: #334155;
+}
+
+@layer base {
+    body {
+        @apply bg-[var(--color-panel)] text-[var(--color-ink)] antialiased;
+        background-image:
+            radial-gradient(circle at top left, rgba(15, 118, 110, 0.08), transparent 40%),
+            linear-gradient(180deg, color-mix(in srgb, var(--color-panel) 80%, #e2e8f0) 0%, var(--color-panel) 45%, color-mix(in srgb, var(--color-panel) 92%, white) 100%);
+        min-height: 100vh;
+    }
+
+    html[data-theme='dark'] body {
+        background-image:
+            radial-gradient(circle at top left, rgba(20, 184, 166, 0.12), transparent 45%),
+            linear-gradient(180deg, #0b1220 0%, #0f172a 50%, #111827 100%);
+    }
+
+    a {
+        @apply text-[var(--color-accent-strong)];
+    }
+}
+
+@layer components {
+    .cip-shell {
+        @apply min-h-screen lg:grid lg:grid-cols-[260px_1fr];
+    }
+
+    .cip-sidebar {
+        @apply border-r border-[var(--color-line)] bg-[#0b1f33] text-slate-100;
+    }
+
+    @media (max-width: 1023px) {
+        .cip-sidebar {
+            @apply fixed inset-y-0 left-0 z-30 w-72 -translate-x-full transition;
+        }
+
+        .cip-sidebar.is-open {
+            @apply translate-x-0;
+        }
+    }
+
+    .cip-nav-link {
+        @apply block rounded-md px-3 py-2 text-sm text-slate-200 transition hover:bg-white/10 hover:text-white;
+    }
+
+    .cip-nav-link-active {
+        @apply bg-teal-700/40 text-white;
+    }
+
+    .cip-card {
+        @apply rounded-xl border border-[var(--color-line)] bg-white/90 p-5 shadow-sm backdrop-blur;
+    }
+
+    html[data-theme='dark'] .cip-card {
+        @apply bg-slate-900/80;
+    }
+
+    .cip-btn {
+        @apply inline-flex items-center justify-center rounded-md bg-[var(--color-accent)] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[var(--color-accent-strong)];
+    }
+
+    .cip-btn-secondary {
+        @apply inline-flex items-center justify-center rounded-md border border-[var(--color-line)] bg-white px-3 py-2 text-sm font-semibold text-[var(--color-ink)] transition hover:bg-slate-50;
+    }
+
+    html[data-theme='dark'] .cip-btn-secondary {
+        @apply bg-slate-900 hover:bg-slate-800;
+    }
+
+    .cip-input {
+        @apply w-full rounded-md border border-[var(--color-line)] bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20;
+    }
+
+    html[data-theme='dark'] .cip-input {
+        @apply bg-slate-950 text-slate-100;
+    }
+
+    .cip-label {
+        @apply mb-1 block text-sm font-medium text-slate-700;
+    }
+
+    html[data-theme='dark'] .cip-label {
+        @apply text-slate-300;
+    }
+
+    .cip-table {
+        @apply w-full text-left text-sm;
+    }
+
+    .cip-table th {
+        @apply border-b border-[var(--color-line)] px-3 py-2 font-semibold text-slate-600;
+    }
+
+    .cip-table td {
+        @apply border-b border-[var(--color-line)] px-3 py-2 align-top;
+    }
+
+    .cip-badge {
+        @apply inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700;
+    }
+
+    html[data-theme='dark'] .cip-badge {
+        @apply bg-slate-800 text-slate-200;
+    }
 }

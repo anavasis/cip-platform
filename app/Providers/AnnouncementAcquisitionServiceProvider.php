@@ -168,7 +168,7 @@ class AnnouncementAcquisitionServiceProvider extends ServiceProvider
         };
         Route::bind('acquisition_run', $acquisitionRunBinding);
         Route::bind('acquisitionRun', $acquisitionRunBinding);
-
+        Route::bind('run', $acquisitionRunBinding);
     }
 
     /** @return array{0: string, 1: string} */
@@ -177,9 +177,19 @@ class AnnouncementAcquisitionServiceProvider extends ServiceProvider
         $organization = $route->parameter('organization');
         $project = $route->parameter('project');
 
-        return [
-            is_object($organization) ? (string) $organization->id : (string) $organization,
-            is_object($project) ? (string) $project->id : (string) $project,
-        ];
+        $organizationId = is_object($organization) ? (string) $organization->id : (string) $organization;
+        $projectId = is_object($project) ? (string) $project->id : (string) $project;
+
+        // Operator Blade UI selects tenant via session rather than route params.
+        if ($organizationId === '' || $projectId === '') {
+            $organizationId = (string) (\App\Support\OperatorContext::organizationId()
+                ?? request()->attributes->get('organization_id')
+                ?? '');
+            $projectId = (string) (\App\Support\OperatorContext::projectId()
+                ?? request()->attributes->get('project_id')
+                ?? '');
+        }
+
+        return [$organizationId, $projectId];
     }
 }
