@@ -41,11 +41,13 @@ final class LaravelSafeFeedFetcher implements FeedFetcherInterface
         }
 
         $currentUrl = $validation['url'];
+        $currentIps = $validation['ips'];
         $redirectCount = 0;
 
         while (true) {
             $response = $this->performRequest(
                 $currentUrl,
+                $currentIps,
                 self::TIMEOUT_SECONDS,
                 self::MAX_BODY_BYTES,
                 self::ACCEPT_HEADER,
@@ -114,6 +116,7 @@ final class LaravelSafeFeedFetcher implements FeedFetcherInterface
                 }
 
                 $currentUrl = $redirectValidation['url'];
+                $currentIps = $redirectValidation['ips'];
                 $redirectCount++;
 
                 continue;
@@ -172,11 +175,13 @@ final class LaravelSafeFeedFetcher implements FeedFetcherInterface
         }
 
         $currentUrl = $validation['url'];
+        $currentIps = $validation['ips'];
         $redirectCount = 0;
 
         while (true) {
             $response = $this->performRequest(
                 $currentUrl,
+                $currentIps,
                 self::AUDIT_TIMEOUT_SECONDS,
                 self::AUDIT_MAX_BODY_BYTES,
                 self::AUDIT_ACCEPT_HEADER,
@@ -254,6 +259,7 @@ final class LaravelSafeFeedFetcher implements FeedFetcherInterface
                 }
 
                 $currentUrl = $redirectValidation['url'];
+                $currentIps = $redirectValidation['ips'];
                 $redirectCount++;
 
                 continue;
@@ -313,21 +319,33 @@ final class LaravelSafeFeedFetcher implements FeedFetcherInterface
      */
     private function performRequest(
         string $url,
+        array $validatedIps,
         int $timeout,
         int $maxBodyBytes,
         string $accept,
         int $classificationPrefixBytes = 0,
     ): array {
         try {
+            $connection = $this->pinnedConnection($url, $validatedIps);
+
+            if ($connection === null) {
+                throw new \RuntimeException('validated_address_missing');
+            }
+
+            $curlResolveOption = defined('CURLOPT_RESOLVE') ? constant('CURLOPT_RESOLVE') : 10203;
             $response = Http::withOptions([
                 'allow_redirects' => false,
                 'verify' => true,
                 'cookies' => false,
                 'stream' => true,
                 'connect_timeout' => $timeout,
+                'curl' => [
+                    $curlResolveOption => [$connection['resolve']],
+                ],
             ])
                 ->timeout($timeout)
                 ->withHeaders([
+                    'Host' => $connection['host_header'],
                     'User-Agent' => self::USER_AGENT,
                     'Accept' => $accept,
                 ])
@@ -377,6 +395,50 @@ final class LaravelSafeFeedFetcher implements FeedFetcherInterface
                 'body_too_large' => false,
             ];
         }
+    }
+
+    /**
+     * @param  array<int, string>  $validatedIps
+     * @return array{resolve: string, host_header: string}|null
+     */
+    private function pinnedConnection(string $url, array $validatedIps): ?array
+    {
+        $parts = parse_url($url);
+
+        if (! is_array($parts) || ! isset($parts['scheme'], $parts['host'])) {
+            return null;
+        }
+
+        $scheme = strtolower((string) $parts['scheme']);
+        $host = trim((string) $parts['host'], '[]');
+        $port = isset($parts['port'])
+            ? (int) $parts['port']
+            : ($scheme === 'https' ? 443 : 80);
+        $ips = [];
+
+        foreach ($validatedIps as $ip) {
+            if (! is_string($ip) || filter_var($ip, FILTER_VALIDATE_IP) === false) {
+                continue;
+            }
+
+            $normalized = strtolower(trim($ip, '[]'));
+            $ips[$normalized] = str_contains($normalized, ':')
+                ? "[{$normalized}]"
+                : $normalized;
+        }
+
+        if ($host === '' || $port < 1 || $port > 65535 || $ips === []) {
+            return null;
+        }
+
+        $defaultPort = ($scheme === 'http' && $port === 80)
+            || ($scheme === 'https' && $port === 443);
+        $hostHeader = str_contains($host, ':') ? "[{$host}]" : $host;
+
+        return [
+            'resolve' => "{$host}:{$port}:".implode(',', array_values($ips)),
+            'host_header' => $hostHeader.($defaultPort ? '' : ':'.$port),
+        ];
     }
 
     private function readResponseBody(StreamInterface $stream, int $limit): string

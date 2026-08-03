@@ -2,6 +2,8 @@
 
 namespace App\Modules\Acquisition\Infrastructure\Http;
 
+use Closure;
+
 final class SafeUrlGuard
 {
     private const IPV4_BLOCKED_CIDRS = [
@@ -33,9 +35,14 @@ final class SafeUrlGuard
         'ff00::/8',
     ];
 
+    /** @param null|Closure(string): array<int, string> $resolver */
+    public function __construct(
+        private readonly ?Closure $resolver = null,
+    ) {}
+
     /**
      * @param  array<int, string>  $allowedDomains
-     * @return array{ok: bool, error: string, url: string}
+     * @return array{ok: bool, error: string, url: string, ips: array<int, string>}
      */
     public function validate(string $url, array $allowedDomains): array
     {
@@ -66,7 +73,12 @@ final class SafeUrlGuard
                 return $this->failure('non_public_address');
             }
 
-            return ['ok' => true, 'error' => '', 'url' => $parsed['url']];
+            return [
+                'ok' => true,
+                'error' => '',
+                'url' => $parsed['url'],
+                'ips' => [$host],
+            ];
         }
 
         $resolvedAddresses = $this->resolveHostAddresses($host);
@@ -81,7 +93,12 @@ final class SafeUrlGuard
             }
         }
 
-        return ['ok' => true, 'error' => '', 'url' => $parsed['url']];
+        return [
+            'ok' => true,
+            'error' => '',
+            'url' => $parsed['url'],
+            'ips' => $resolvedAddresses,
+        ];
     }
 
     /**
@@ -227,6 +244,12 @@ final class SafeUrlGuard
     /** @return array<int, string> */
     private function resolveHostAddresses(string $host): array
     {
+        if ($this->resolver !== null) {
+            $resolved = ($this->resolver)($host);
+
+            return is_array($resolved) ? $this->normalizeAddresses($resolved) : [];
+        }
+
         $addresses = [];
         $recordTypes = 0;
 
@@ -268,9 +291,22 @@ final class SafeUrlGuard
             }
         }
 
+        return $this->normalizeAddresses($addresses);
+    }
+
+    /**
+     * @param  array<int, mixed>  $addresses
+     * @return array<int, string>
+     */
+    private function normalizeAddresses(array $addresses): array
+    {
         $unique = [];
 
         foreach ($addresses as $address) {
+            if (! is_string($address)) {
+                continue;
+            }
+
             $normalized = strtolower(trim($address));
 
             if ($normalized !== '') {
@@ -406,9 +442,9 @@ final class SafeUrlGuard
         return (ord($ipPacked[$fullBytes]) & $mask) === (ord($subnetPacked[$fullBytes]) & $mask);
     }
 
-    /** @return array{ok: false, error: string, url: string} */
+    /** @return array{ok: false, error: string, url: string, ips: array<int, string>} */
     private function failure(string $errorCode): array
     {
-        return ['ok' => false, 'error' => $errorCode, 'url' => ''];
+        return ['ok' => false, 'error' => $errorCode, 'url' => '', 'ips' => []];
     }
 }

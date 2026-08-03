@@ -87,4 +87,24 @@ class SafeUrlGuardTest extends TestCase
         $this->assertFalse($result['ok']);
         $this->assertSame('host_not_allowed', $result['error']);
     }
+
+    public function test_success_returns_the_validated_public_addresses(): void
+    {
+        $guard = new SafeUrlGuard(
+            static fn (string $host): array => $host === 'feeds.example.test'
+                ? ['93.184.216.34', '2606:4700:4700::1111']
+                : [],
+        );
+
+        $result = $guard->validate(
+            'https://feeds.example.test/rss',
+            ['feeds.example.test'],
+        );
+
+        $this->assertTrue($result['ok']);
+        $this->assertSame(
+            ['93.184.216.34', '2606:4700:4700::1111'],
+            $result['ips'],
+        );
+    }
 }
