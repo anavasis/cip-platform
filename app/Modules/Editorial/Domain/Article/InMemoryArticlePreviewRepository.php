@@ -19,7 +19,7 @@ final class InMemoryArticlePreviewRepository implements ArticlePreviewRepository
             return false;
         }
 
-        $this->byId[$preview->previewId()] = $preview;
+        $this->byId[$this->idKey($preview->organizationId(), $preview->projectId(), $preview->previewId())] = $preview;
         $this->latestByScope[$this->scopeKey(
             $preview->organizationId(),
             $preview->projectId(),
@@ -29,9 +29,9 @@ final class InMemoryArticlePreviewRepository implements ArticlePreviewRepository
         return true;
     }
 
-    public function findById(string $previewId): ?ArticlePreview
+    public function findById(string $organizationId, string $projectId, string $previewId): ?ArticlePreview
     {
-        return $this->byId[$previewId] ?? null;
+        return $this->byId[$this->idKey($organizationId, $projectId, $previewId)] ?? null;
     }
 
     public function findLatestForAnnouncement(
@@ -44,11 +44,21 @@ final class InMemoryArticlePreviewRepository implements ArticlePreviewRepository
             return null;
         }
 
-        return $this->findById($this->latestByScope[$key]);
+        return $this->findById($organizationId, $projectId, $this->latestByScope[$key]);
+    }
+
+    public function findByPreviewKey(string $organizationId, string $projectId, string $previewKey): ?ArticlePreview
+    {
+        return $this->findById($organizationId, $projectId, $previewKey);
     }
 
     private function scopeKey(string $organizationId, string $projectId, string $announcementId): string
     {
         return $organizationId.'|'.$projectId.'|'.$announcementId;
+    }
+
+    private function idKey(string $organizationId, string $projectId, string $previewId): string
+    {
+        return $organizationId.'|'.$projectId.'|'.$previewId;
     }
 }

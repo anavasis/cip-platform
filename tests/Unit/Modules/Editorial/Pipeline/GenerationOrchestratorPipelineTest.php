@@ -92,7 +92,7 @@ class GenerationOrchestratorPipelineTest extends TestCase
 
         $expectedId = 'apv_'.substr(hash('sha256', $out['result_id'].'|'.$out['request_id']), 0, 24);
         $this->assertSame($expectedId, $preview->previewId());
-        $this->assertNotNull($previews->findById($preview->previewId()));
+        $this->assertNotNull($previews->findById($preview->organizationId(), $preview->projectId(), $preview->previewId()));
     }
 
     public function test_preview_title_fallback_constant_present_in_orchestrator(): void

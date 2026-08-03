@@ -2,38 +2,18 @@
 
 namespace App\Modules\Editorial\Domain\PromptContext;
 
-
 /**
- * Persistence port for Prompt Context snapshots.
- * BUILD-002 provides the interface only — no database adapter.
+ * Persistence port for Prompt Context snapshots (tenant-scoped).
  */
 interface PromptContextRepositoryInterface
 {
-    /**
-     * @param PromptContext $context
-     * @return bool
-     */
-    public function save(PromptContext $context);
+    public function save(string $organizationId, string $projectId, PromptContext $context): bool;
 
-    /**
-     * @param string $contextId
-     * @return PromptContext|null
-     */
-    public function findById($contextId);
+    public function findById(string $organizationId, string $projectId, string $contextId): ?PromptContext;
 
-    /**
-     * Latest non-superseded context for an announcement, if any.
-     *
-     * @param string $announcementId
-     * @return PromptContext|null
-     */
-    public function findLatestForAnnouncement($announcementId);
+    public function findByContextHash(string $organizationId, string $projectId, string $contextHash): ?PromptContext;
 
-    /**
-     * Latest context bound to a blueprint id, if any.
-     *
-     * @param string $blueprintId
-     * @return PromptContext|null
-     */
-    public function findLatestForBlueprint($blueprintId);
+    public function findLatestForAnnouncement(string $organizationId, string $projectId, string $announcementId): ?PromptContext;
+
+    public function findLatestForBlueprint(string $organizationId, string $projectId, string $blueprintId): ?PromptContext;
 }

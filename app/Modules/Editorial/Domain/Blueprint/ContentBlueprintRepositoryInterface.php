@@ -2,30 +2,14 @@
 
 namespace App\Modules\Editorial\Domain\Blueprint;
 
-
 /**
- * Persistence port for Content Blueprints.
- * BUILD-001 provides the interface only — no database adapter.
+ * Persistence port for Content Blueprints (tenant-scoped).
  */
 interface ContentBlueprintRepositoryInterface
 {
-    /**
-     * @param ContentBlueprint $blueprint
-     * @return bool
-     */
-    public function save(ContentBlueprint $blueprint);
+    public function save(string $organizationId, string $projectId, ContentBlueprint $blueprint): bool;
 
-    /**
-     * @param string $blueprintId
-     * @return ContentBlueprint|null
-     */
-    public function findById($blueprintId);
+    public function findById(string $organizationId, string $projectId, string $blueprintId): ?ContentBlueprint;
 
-    /**
-     * Latest non-superseded blueprint for an announcement, if any.
-     *
-     * @param string $announcementId
-     * @return ContentBlueprint|null
-     */
-    public function findLatestForAnnouncement($announcementId);
+    public function findLatestForAnnouncement(string $organizationId, string $projectId, string $announcementId): ?ContentBlueprint;
 }

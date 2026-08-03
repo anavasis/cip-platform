@@ -2,44 +2,18 @@
 
 namespace App\Modules\Editorial\Domain\GenerationResult;
 
-
 /**
- * Persistence port for Generation Results.
- * BUILD-005 provides the interface only — no database adapter.
+ * Persistence port for Generation Results (tenant-scoped).
  */
 interface GenerationResultRepositoryInterface
 {
-    /**
-     * @param GenerationResult $result
-     * @return bool
-     */
-    public function save(GenerationResult $result);
+    public function save(string $organizationId, string $projectId, GenerationResult $result): bool;
 
-    /**
-     * @param string $resultId
-     * @return GenerationResult|null
-     */
-    public function findById($resultId);
+    public function findById(string $organizationId, string $projectId, string $resultId): ?GenerationResult;
 
-    /**
-     * @param string $resultHash
-     * @return GenerationResult|null
-     */
-    public function findByResultHash($resultHash);
+    public function findByResultHash(string $organizationId, string $projectId, string $resultHash): ?GenerationResult;
 
-    /**
-     * Result for a Generation Request id, if any (at most one successful outcome expected).
-     *
-     * @param string $requestId
-     * @return GenerationResult|null
-     */
-    public function findByRequestId($requestId);
+    public function findByRequestId(string $organizationId, string $projectId, string $requestId): ?GenerationResult;
 
-    /**
-     * Latest result for an announcement, if any.
-     *
-     * @param string $announcementId
-     * @return GenerationResult|null
-     */
-    public function findLatestForAnnouncement($announcementId);
+    public function findLatestForAnnouncement(string $organizationId, string $projectId, string $announcementId): ?GenerationResult;
 }

@@ -2,44 +2,23 @@
 
 namespace App\Modules\Editorial\Domain\GenerationRequest;
 
-
 /**
- * Persistence port for Generation Requests.
- * BUILD-004 provides the interface only — no database adapter.
+ * Persistence port for Generation Requests (tenant-scoped).
  */
 interface GenerationRequestRepositoryInterface
 {
-    /**
-     * @param GenerationRequest $request
-     * @return bool
-     */
-    public function save(GenerationRequest $request);
+    public function save(string $organizationId, string $projectId, GenerationRequest $request): bool;
+
+    public function findById(string $organizationId, string $projectId, string $requestId): ?GenerationRequest;
+
+    public function findByRequestHash(string $organizationId, string $projectId, string $requestHash): ?GenerationRequest;
+
+    public function findLatestForAnnouncement(string $organizationId, string $projectId, string $announcementId): ?GenerationRequest;
+
+    public function findLatestForPackage(string $organizationId, string $projectId, string $packageId): ?GenerationRequest;
 
     /**
-     * @param string $requestId
-     * @return GenerationRequest|null
+     * @return list<GenerationRequest>
      */
-    public function findById($requestId);
-
-    /**
-     * @param string $requestHash
-     * @return GenerationRequest|null
-     */
-    public function findByRequestHash($requestHash);
-
-    /**
-     * Latest non-superseded/cancelled request for an announcement, if any.
-     *
-     * @param string $announcementId
-     * @return GenerationRequest|null
-     */
-    public function findLatestForAnnouncement($announcementId);
-
-    /**
-     * Latest request bound to a Prompt Package id, if any.
-     *
-     * @param string $packageId
-     * @return GenerationRequest|null
-     */
-    public function findLatestForPackage($packageId);
+    public function listForProject(string $organizationId, string $projectId, int $limit = 50, int $offset = 0): array;
 }

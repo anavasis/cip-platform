@@ -2,44 +2,18 @@
 
 namespace App\Modules\Editorial\Domain\PromptPackage;
 
-
 /**
- * Persistence port for Prompt Packages.
- * BUILD-003 provides the interface only — no database adapter.
+ * Persistence port for Prompt Packages (tenant-scoped).
  */
 interface PromptPackageRepositoryInterface
 {
-    /**
-     * @param PromptPackage $package
-     * @return bool
-     */
-    public function save(PromptPackage $package);
+    public function save(string $organizationId, string $projectId, PromptPackage $package): bool;
 
-    /**
-     * @param string $packageId
-     * @return PromptPackage|null
-     */
-    public function findById($packageId);
+    public function findById(string $organizationId, string $projectId, string $packageId): ?PromptPackage;
 
-    /**
-     * @param string $packageHash
-     * @return PromptPackage|null
-     */
-    public function findByPackageHash($packageHash);
+    public function findByPackageHash(string $organizationId, string $projectId, string $packageHash): ?PromptPackage;
 
-    /**
-     * Latest non-superseded package for an announcement, if any.
-     *
-     * @param string $announcementId
-     * @return PromptPackage|null
-     */
-    public function findLatestForAnnouncement($announcementId);
+    public function findLatestForAnnouncement(string $organizationId, string $projectId, string $announcementId): ?PromptPackage;
 
-    /**
-     * Latest package bound to a Prompt Context id, if any.
-     *
-     * @param string $contextId
-     * @return PromptPackage|null
-     */
-    public function findLatestForContext($contextId);
+    public function findLatestForContext(string $organizationId, string $projectId, string $contextId): ?PromptPackage;
 }
