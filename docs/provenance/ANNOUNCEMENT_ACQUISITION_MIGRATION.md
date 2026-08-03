@@ -38,6 +38,9 @@ Announcement item identity remains identical to Foundation:
 
 - Every source, announcement, acquisition run, and run item carries
   `organization_id` and `project_id`.
+- In-memory evidence and all acquisition diagnostics are partitioned by
+  organization and project. The diagnostics API cannot enumerate another
+  tenant's evidence, runs, counters, or latest ingestion.
 - Repository reads and writes are scoped to both tenant identifiers.
 - Route model binding for sources, announcements, and acquisition runs verifies
   organization and project ownership.
@@ -57,7 +60,9 @@ The migration preserves fail-closed acquisition controls:
 - HTTP/HTTPS-only URLs and rejection of embedded credentials;
 - rejection of private, loopback, link-local, reserved, and non-public literal
   or DNS-resolved addresses;
-- DNS resolution validation before requests;
+- DNS resolution validation before requests, followed by cURL
+  `CURLOPT_RESOLVE` pinning to the validated public addresses while preserving
+  the original HTTP Host header and TLS server name;
 - disabled automatic redirects with allowlist and public-address revalidation
   on every redirect hop;
 - bounded redirect counts, response sizes, timeouts, and streamed reads; and
@@ -66,6 +71,38 @@ The migration preserves fail-closed acquisition controls:
 
 Laravel HTTP fakes do not replace these checks: the URL guard runs before the
 HTTP client, including in tests.
+
+## Controlled pre-merge corrections
+
+The pre-merge review added the following safety corrections without introducing
+legacy runtime dependencies:
+
+- Acquisition and source-registry capabilities now use project-aware Kernel
+  feature flags and fail closed when no flag exists.
+- New sources default to disabled and manual-only, with a one-hour acquisition
+  interval unless explicitly configured.
+- Due acquisition scans are Kernel schedule definitions dispatched through an
+  acquisition-aware `SchedulerService` adapter. Scans are tenant-scoped,
+  interval-aware, chunked, capability-checked, and protected by project and
+  source cache locks.
+- The standalone Laravel `everyFiveMinutes` registration was removed.
+- Evidence stores organization/project and optional correlation/run IDs.
+  Successful storage emits one metadata-only `EvidenceCaptured` event.
+- Announcement lifecycle application runs in a database transaction. Existing
+  rows are tenant-scoped and locked, insert races are re-read and classified,
+  and revision increments are atomic.
+- Acquisition runs are persisted as running before orchestration, always
+  terminalized, and emit one failure event per failed attempt. Permanent errors
+  do not retry; transient transport and persistence errors use up to three
+  queue attempts.
+- Acquisition runs now enforce tenant foreign keys, run items enforce their
+  run/source foreign keys, and persistence includes run-list and due-source
+  indexes. Announcement tenant/source foreign keys and project-scoped
+  uniqueness remain intact.
+- Regression coverage includes safe defaults, capability isolation, scheduler
+  dispatch/overlap behavior, DNS pinning and redirect repinning, tenant
+  diagnostics/evidence isolation, unique-insert recovery, retry behavior, and
+  a PostgreSQL-only genuine lifecycle concurrency test.
 
 ## Deferred work
 
