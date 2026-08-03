@@ -70,7 +70,6 @@ final class OpenAiProvider implements AiProviderInterface
 
         $payload = [
             'model' => $model,
-            'temperature' => $temperature,
             'max_completion_tokens' => $maxTokens,
             'messages' => [
                 [
@@ -83,6 +82,11 @@ final class OpenAiProvider implements AiProviderInterface
                 ],
             ],
         ];
+
+        // Reasoning GPT-5 / o-series models reject non-default temperature.
+        if ($this->supportsTemperature($model)) {
+            $payload['temperature'] = $temperature;
+        }
 
         $attempt = 0;
         $lastError = EditorialErrorCodes::PROVIDER_ERROR;
@@ -151,7 +155,7 @@ final class OpenAiProvider implements AiProviderInterface
                     'content_hash' => $contentHash,
                     'mime_type' => 'text/markdown',
                 ];
-            } catch (ConnectionException $e) {
+            } catch (ConnectionException) {
                 $lastError = EditorialErrorCodes::PROVIDER_ERROR;
                 $lastMessage = 'OpenAI connection timeout or network failure.';
                 if ($attempt <= $retries) {
@@ -169,6 +173,28 @@ final class OpenAiProvider implements AiProviderInterface
         return $this->failure($lastError, $lastMessage, $this->ms($started));
     }
 
+    /**
+     * GPT-5 reasoning family and o-series reject temperature.
+     * Chat-capable variants (e.g. gpt-5-chat-latest) and GPT-4.x accept it.
+     */
+    public function supportsTemperature(string $model): bool
+    {
+        $normalized = strtolower(trim($model));
+        if ($normalized === '') {
+            return false;
+        }
+
+        if (preg_match('/^gpt-5(?!.*chat)/', $normalized) === 1) {
+            return false;
+        }
+
+        if (preg_match('/^(o1|o3|o4)(-|$)/', $normalized) === 1) {
+            return false;
+        }
+
+        return true;
+    }
+
     private function resolveApiKey(string $organizationId, string $projectId): ?string
     {
         $secretName = (string) config('editorial.ai.openai.secret_key', 'openai_api_key');
@@ -183,10 +209,10 @@ final class OpenAiProvider implements AiProviderInterface
             }
         }
 
-        // Also accept env fallback for bootstrap (still fail-closed if empty).
-        $envKey = env('OPENAI_API_KEY');
+        // Optional bootstrap fallback via config (config:cache safe). Project secret preferred.
+        $fallback = config('editorial.ai.openai.api_key');
 
-        return is_string($envKey) && $envKey !== '' ? $envKey : null;
+        return is_string($fallback) && $fallback !== '' ? $fallback : null;
     }
 
     private function buildUserPrompt(Announcement $announcement, GenerationRequest $request): string
