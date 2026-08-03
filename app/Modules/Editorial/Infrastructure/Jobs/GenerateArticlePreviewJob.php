@@ -20,6 +20,8 @@ class GenerateArticlePreviewJob implements ShouldQueue
 {
     use Queueable;
 
+    public const TERMINAL_FAILURE_EVENT_MARKER = 'editorial_terminal_generation_failed';
+
     public int $tries = 3;
 
     public int $timeout = 60;
@@ -101,25 +103,35 @@ class GenerateArticlePreviewJob implements ShouldQueue
             ]);
         } catch (Throwable $e) {
             $errorCode = $this->exceptionErrorCode($e);
+            $terminal = $this->isTerminalAttempt($errorCode);
 
-            // Fallback GenerationFailed only when service did not already record a domain failure.
-            if (! $domainFailureRecorded && $organizationId !== '' && $projectId !== '') {
-                try {
-                    $eventBus->dispatch(new GenerationFailed(
-                        organizationId: $organizationId,
-                        projectId: $projectId,
-                        announcementId: $announcementId !== '' ? $announcementId : null,
-                        errorCode: $errorCode,
-                        actorId: $actorId !== '' ? $actorId : null,
-                        correlationId: $correlationId,
-                    ));
-                } catch (Throwable) {
-                    // ignore
-                }
-            }
-
-            if ($this->attempts() >= $this->tries || ! $this->isRetryable($errorCode)) {
+            if ($terminal) {
                 $jobEngine->markFailed($job, $errorCode);
+                $job->refresh();
+
+                // Fallback GenerationFailed only once, only when service did not already emit,
+                // and only for terminal failures.
+                if ($domainFailureRecorded) {
+                    $this->markTerminalFailureEvent($job);
+                } elseif (
+                    $organizationId !== ''
+                    && $projectId !== ''
+                    && ! $this->hasTerminalFailureEventMarker($job)
+                ) {
+                    try {
+                        $eventBus->dispatch(new GenerationFailed(
+                            organizationId: $organizationId,
+                            projectId: $projectId,
+                            announcementId: $announcementId !== '' ? $announcementId : null,
+                            errorCode: $errorCode,
+                            actorId: $actorId !== '' ? $actorId : null,
+                            correlationId: $correlationId,
+                        ));
+                        $this->markTerminalFailureEvent($job);
+                    } catch (Throwable) {
+                        // ignore dispatch failures; marker not set so failed() may retry once
+                    }
+                }
             }
 
             throw $e instanceof EditorialGenerationException
@@ -145,10 +157,67 @@ class GenerateArticlePreviewJob implements ShouldQueue
             if ($job->completed_at !== null) {
                 return;
             }
+
             $error = $exception ? $this->exceptionErrorCode($exception) : EditorialErrorCodes::EDITORIAL_JOB_FAILED;
             app(JobEngineService::class)->markFailed($job, $error);
+            $job->refresh();
+
+            // Terminal fallback only if no prior domain/job terminal event marker exists.
+            if ($this->hasTerminalFailureEventMarker($job)) {
+                return;
+            }
+
+            $organizationId = trim((string) ($job->organization_id ?? ''));
+            $projectId = trim((string) ($job->project_id ?? ''));
+            if ($organizationId === '' || $projectId === '') {
+                $this->markTerminalFailureEvent($job);
+
+                return;
+            }
+
+            $payload = is_array($job->payload) ? $job->payload : [];
+            $announcementId = trim((string) ($payload['announcement_id'] ?? ''));
+            $actorId = isset($payload['actor_id']) ? trim((string) $payload['actor_id']) : null;
+            $correlationId = trim((string) ($payload['correlation_id'] ?? $job->id));
+
+            try {
+                app(EventBusService::class)->dispatch(new GenerationFailed(
+                    organizationId: $organizationId,
+                    projectId: $projectId,
+                    announcementId: $announcementId !== '' ? $announcementId : null,
+                    errorCode: $error,
+                    actorId: $actorId !== '' ? $actorId : null,
+                    correlationId: $correlationId,
+                ));
+            } catch (Throwable) {
+            }
+
+            $this->markTerminalFailureEvent($job);
         } catch (Throwable) {
         }
+    }
+
+    private function isTerminalAttempt(string $errorCode): bool
+    {
+        return $this->attempts() >= $this->tries || ! $this->isRetryable($errorCode);
+    }
+
+    private function hasTerminalFailureEventMarker(PlatformJob $job): bool
+    {
+        $result = is_array($job->result) ? $job->result : [];
+        $payload = is_array($job->payload) ? $job->payload : [];
+
+        return ($result[self::TERMINAL_FAILURE_EVENT_MARKER] ?? false) === true
+            || ($payload[self::TERMINAL_FAILURE_EVENT_MARKER] ?? false) === true;
+    }
+
+    private function markTerminalFailureEvent(PlatformJob $job): void
+    {
+        $result = is_array($job->result) ? $job->result : [];
+        $result[self::TERMINAL_FAILURE_EVENT_MARKER] = true;
+        $payload = is_array($job->payload) ? $job->payload : [];
+        $payload[self::TERMINAL_FAILURE_EVENT_MARKER] = true;
+        $job->forceFill(['result' => $result, 'payload' => $payload])->save();
     }
 
     private function exceptionErrorCode(Throwable $throwable): string
