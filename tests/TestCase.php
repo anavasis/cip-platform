@@ -20,6 +20,18 @@ abstract class TestCase extends BaseTestCase
     {
         parent::setUp();
         $this->seed(DatabaseSeeder::class);
+        $this->withoutVite();
+
+        foreach ([
+            storage_path('framework/views'),
+            storage_path('framework/cache'),
+            storage_path('framework/cache/data'),
+            storage_path('framework/sessions'),
+        ] as $path) {
+            if (! is_dir($path)) {
+                mkdir($path, 0775, true);
+            }
+        }
     }
 
     protected function createUserWithOrg(string $roleName = 'owner'): array

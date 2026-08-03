@@ -27,6 +27,7 @@ use App\Modules\Editorial\Domain\PromptPackage\PromptPackageBuilder;
 use App\Modules\Editorial\Domain\PromptPackage\PromptPackageRepositoryInterface;
 use App\Modules\Editorial\Domain\PromptPackage\PromptPackageValidator;
 use App\Modules\Editorial\Application\AnnouncementSnapshotMapper;
+use App\Modules\Editorial\Infrastructure\Generation\OpenAiProvider;
 use App\Modules\Editorial\Infrastructure\Generation\StubAiProvider;
 use App\Modules\Editorial\Infrastructure\Persistence\Repositories\EloquentArticlePreviewRepository;
 use App\Modules\Editorial\Infrastructure\Persistence\Repositories\EloquentContentBlueprintRepository;
@@ -53,7 +54,14 @@ class EditorialServiceProvider extends ServiceProvider
         $this->app->bind(GenerationResultRepositoryInterface::class, EloquentGenerationResultRepository::class);
         $this->app->bind(ArticlePreviewRepositoryInterface::class, EloquentArticlePreviewRepository::class);
 
-        $this->app->bind(AiProviderInterface::class, StubAiProvider::class);
+        $this->app->bind(AiProviderInterface::class, function ($app) {
+            $driver = (string) config('editorial.ai.driver', 'stub');
+            if ($driver === 'openai' && ! $app->environment('testing')) {
+                return $app->make(OpenAiProvider::class);
+            }
+
+            return $app->make(StubAiProvider::class);
+        });
 
         $this->app->singleton(GenerationOrchestrator::class, function ($app) {
             return new GenerationOrchestrator(

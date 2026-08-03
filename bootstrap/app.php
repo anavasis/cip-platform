@@ -22,6 +22,12 @@ return Application::configure(basePath: dirname(__DIR__))
             'org.access' => \App\Http\Middleware\EnsureOrganizationAccess::class,
             'project.access' => \App\Http\Middleware\EnsureProjectAccess::class,
             'permission' => \App\Http\Middleware\EnforcePermission::class,
+            'operator.context' => \App\Http\Middleware\EnsureOperatorContext::class,
+            'web.permission' => \App\Http\Middleware\EnsureWebPermission::class,
+            'session.timeout' => \App\Http\Middleware\EnforceSessionTimeout::class,
+        ]);
+        $middleware->web(append: [
+            \App\Http\Middleware\EnforceSessionTimeout::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -23,9 +23,11 @@ class EditorialArchitectureTest extends TestCase
 
     public function test_no_delivery_wordpress_or_vendor_ai_imports(): void
     {
+        $openAiProvider = realpath(base_path('app/Modules/Editorial/Infrastructure/Generation/OpenAiProvider.php'));
+
         foreach ($this->phpFiles(base_path('app/Modules/Editorial')) as $file) {
             $contents = file_get_contents($file);
-            foreach ([
+            $needles = [
                 'ABSPATH',
                 'wpdb',
                 'wp_insert_post',
@@ -33,17 +35,30 @@ class EditorialArchitectureTest extends TestCase
                 'StudyMentor',
                 'SMCE',
                 'plugin_version',
-                'OpenAI',
                 'Anthropic',
                 'Gemini',
                 'GuzzleHttp\\Client',
                 'App\\Modules\\Delivery',
                 'Migration\\Delivery',
-            ] as $needle) {
+            ];
+
+            // Prompt 20 allows one production OpenAI adapter behind AiProviderInterface.
+            // Keep vendor AI SDKs / alternate providers out of Domain/Application and other infra.
+            if (realpath($file) !== $openAiProvider) {
+                $needles[] = 'OpenAI';
+            }
+
+            foreach ($needles as $needle) {
                 $this->assertStringNotContainsString($needle, $contents, $file.' contains '.$needle);
             }
             $this->assertDoesNotMatchRegularExpression('/\\bwp_[a-zA-Z0-9_]+\\s*\\(/', $contents, $file);
         }
+
+        $this->assertFileExists($openAiProvider);
+        $openAiSource = file_get_contents($openAiProvider);
+        $this->assertStringContainsString('implements AiProviderInterface', $openAiSource);
+        $this->assertStringNotContainsString('GuzzleHttp\\Client', $openAiSource);
+        $this->assertStringNotContainsString('openai_api_key=', $openAiSource);
     }
 
     public function test_orchestrator_depends_on_ai_provider_interface_only(): void
