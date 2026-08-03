@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Application\Services\FeatureFlagService;
 use App\Modules\Editorial\Application\CapabilityGate;
 use App\Modules\Editorial\Application\EditorialDiagnostics;
 use App\Modules\Editorial\Application\GenerateArticlePreviewService;
@@ -39,7 +40,9 @@ class EditorialServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->app->singleton(CapabilityGate::class);
+        $this->app->singleton(CapabilityGate::class, function ($app) {
+            return new CapabilityGate($app->make(FeatureFlagService::class));
+        });
         $this->app->singleton(EditorialDiagnostics::class);
         $this->app->bind(GenerationDiagnosticsSink::class, EditorialDiagnostics::class);
 

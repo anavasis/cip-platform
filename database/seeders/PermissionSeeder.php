@@ -32,6 +32,10 @@ class PermissionSeeder extends Seeder
             'acquisition.view' => 'View acquisition runs',
             'acquisition.run' => 'Run acquisition and ingestion jobs',
             'acquisition.diagnostics' => 'View acquisition diagnostics',
+            'editorial.view' => 'View editorial artifacts and previews',
+            'editorial.generate' => 'Generate editorial article previews',
+            'editorial.regenerate' => 'Regenerate editorial article previews',
+            'editorial.diagnostics' => 'View editorial diagnostics',
         ];
 
         foreach ($permissions as $name => $description) {
@@ -52,11 +56,13 @@ class PermissionSeeder extends Seeder
                 'sources.view', 'sources.manage', 'sources.run',
                 'announcements.view',
                 'acquisition.view', 'acquisition.run', 'acquisition.diagnostics',
+                'editorial.view', 'editorial.generate', 'editorial.regenerate', 'editorial.diagnostics',
             ],
             'member' => [
                 'organizations.view', 'projects.view',
                 'audit.view', 'connectors.view', 'jobs.view',
                 'sources.view', 'announcements.view', 'acquisition.view',
+                'editorial.view',
             ],
         ];
 
@@ -79,6 +85,7 @@ class PermissionSeeder extends Seeder
                 'sources.view', 'sources.manage', 'sources.run',
                 'announcements.view',
                 'acquisition.view', 'acquisition.run', 'acquisition.diagnostics',
+                'editorial.view', 'editorial.generate', 'editorial.regenerate', 'editorial.diagnostics',
             ],
             'editor' => [
                 'projects.view', 'config.manage',
@@ -86,10 +93,12 @@ class PermissionSeeder extends Seeder
                 'sources.view', 'sources.manage', 'sources.run',
                 'announcements.view',
                 'acquisition.view', 'acquisition.run',
+                'editorial.view', 'editorial.generate', 'editorial.regenerate',
             ],
             'viewer' => [
                 'projects.view', 'connectors.view', 'jobs.view',
                 'sources.view', 'announcements.view', 'acquisition.view',
+                'editorial.view',
             ],
         ];
 
