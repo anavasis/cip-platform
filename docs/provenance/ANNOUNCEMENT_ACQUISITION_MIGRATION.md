@@ -24,6 +24,16 @@ wiring.
   fingerprints, diagnostics, run persistence, API controllers, events,
   schedules, and acquisition jobs.
 
+## Identity algorithm
+
+Announcement item identity remains identical to Foundation:
+
+- `normalizeUrl`: `trim` + `strtolower` only (no path/port/fragment rewriting)
+- `identityHash`: SHA-256 of the normalized canonical URL
+- Content hashing includes title, canonical URL, GUID, and published time
+- Item identity is independent from feed-level `FingerprintService` hashes
+- Database uniqueness is project-scoped: `(project_id, source_id, identity_hash)`
+
 ## Tenancy rules
 
 - Every source, announcement, acquisition run, and run item carries
