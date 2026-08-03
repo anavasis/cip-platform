@@ -14,6 +14,8 @@ class AcquisitionDiagnosticsController extends Controller
 
     public function show(Organization $organization, Project $project): JsonResponse
     {
-        return response()->json(['data' => $this->diagnostics->status()]);
+        return response()->json([
+            'data' => $this->diagnostics->status($organization->id, $project->id),
+        ]);
     }
 }

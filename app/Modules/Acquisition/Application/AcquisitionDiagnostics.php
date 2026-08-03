@@ -15,22 +15,26 @@ final class AcquisitionDiagnostics implements IngestionDiagnosticsInterface
 {
     private const EVIDENCE_SUMMARY_LIMIT = 10;
 
-    private ?AcquisitionResult $lastResult = null;
+    /** @var array<string, AcquisitionResult> */
+    private array $lastResults = [];
 
-    private int $acquisitionCount = 0;
+    /** @var array<string, int> */
+    private array $acquisitionCounts = [];
 
-    private int $failureCount = 0;
+    /** @var array<string, int> */
+    private array $failureCounts = [];
 
-    /** @var array<string, mixed>|null */
-    private ?array $startupValidation = null;
+    /** @var array<string, array<string, mixed>> */
+    private array $startupValidations = [];
 
-    /** @var array<string, mixed>|null */
-    private ?array $lastProductionRun = null;
+    /** @var array<string, array<string, mixed>> */
+    private array $lastProductionRuns = [];
 
-    /** @var array<string, mixed>|null */
-    private ?array $lastIngestion = null;
+    /** @var array<string, array<string, mixed>> */
+    private array $lastIngestions = [];
 
-    private int $productionRunsRecorded = 0;
+    /** @var array<string, int> */
+    private array $productionRunsRecorded = [];
 
     public function __construct(
         private readonly CollectorRegistry $collectorRegistry,
@@ -39,20 +43,37 @@ final class AcquisitionDiagnostics implements IngestionDiagnosticsInterface
         private readonly CapabilityGateInterface $capabilityGate,
         private readonly FingerprintService $fingerprintService,
         private readonly string $platformVersion = '',
-        private readonly string $pluginVersion = '',
     ) {}
 
     /** @param array<string, mixed> $validation */
-    public function recordStartupValidation(array $validation): void
+    public function recordStartupValidation(
+        string $organizationId,
+        string $projectId,
+        array $validation,
+    ): void
     {
-        $this->startupValidation = $validation;
+        $key = $this->tenantKey($organizationId, $projectId);
+
+        if ($key !== null) {
+            $this->startupValidations[$key] = $this->metadataOnly($validation);
+        }
     }
 
     /** @param array<string, mixed> $run */
-    public function recordProductionRun(array $run): void
+    public function recordProductionRun(
+        string $organizationId,
+        string $projectId,
+        array $run,
+    ): void
     {
+        $key = $this->tenantKey($organizationId, $projectId);
+
+        if ($key === null) {
+            return;
+        }
+
         $status = isset($run['status']) ? (string) $run['status'] : '';
-        $this->lastProductionRun = [
+        $this->lastProductionRuns[$key] = [
             'run_id' => isset($run['run_id']) ? (string) $run['run_id'] : '',
             'status' => $status,
             'error_code' => isset($run['error_code']) ? (string) $run['error_code'] : '',
@@ -62,35 +83,53 @@ final class AcquisitionDiagnostics implements IngestionDiagnosticsInterface
         ];
 
         if ($status === 'completed' || $status === 'gate_rejected') {
-            $this->productionRunsRecorded++;
+            $this->productionRunsRecorded[$key] = ($this->productionRunsRecorded[$key] ?? 0) + 1;
         }
     }
 
-    public function recordResult(AcquisitionResult $result): void
-    {
-        $this->lastResult = $result;
-        $this->acquisitionCount++;
+    public function recordResult(
+        string $organizationId,
+        string $projectId,
+        AcquisitionResult $result,
+    ): void {
+        $key = $this->tenantKey($organizationId, $projectId);
+
+        if ($key === null) {
+            return;
+        }
+
+        $this->lastResults[$key] = $result;
+        $this->acquisitionCounts[$key] = ($this->acquisitionCounts[$key] ?? 0) + 1;
 
         if (! $result->success()) {
-            $this->failureCount++;
+            $this->failureCounts[$key] = ($this->failureCounts[$key] ?? 0) + 1;
         }
     }
 
     /** @param array<string, mixed> $data */
     public function record(array $data): void
     {
-        $this->lastIngestion = $this->metadataOnly($data);
+        $key = $this->tenantKey(
+            (string) ($data['organization_id'] ?? ''),
+            (string) ($data['project_id'] ?? ''),
+        );
+
+        if ($key !== null) {
+            $this->lastIngestions[$key] = $this->metadataOnly($data);
+        }
     }
 
     /** @return array<string, mixed> */
-    public function status(): array
+    public function status(string $organizationId, string $projectId): array
     {
+        $key = $this->tenantKey($organizationId, $projectId);
         $collectorIds = array_keys($this->collectorRegistry->all());
         $last = null;
+        $lastResult = $key !== null ? ($this->lastResults[$key] ?? null) : null;
 
-        if ($this->lastResult !== null) {
-            $last = $this->lastResult->toArray();
-            $lastEvidence = $this->lastResult->evidence();
+        if ($lastResult !== null) {
+            $last = $lastResult->toArray();
+            $lastEvidence = $lastResult->evidence();
 
             if ($lastEvidence instanceof Evidence) {
                 $last['evidence'] = $lastEvidence->toMetadataArray();
@@ -98,16 +137,19 @@ final class AcquisitionDiagnostics implements IngestionDiagnosticsInterface
         }
 
         $sourceTypeMap = $this->collectorRegistry->sourceTypeMap();
-        $evidenceSummaries = $this->evidenceRepository->summaries();
-        $capabilityEnabled = $this->capabilityGate->isEnabled(CapabilityGate::ACQUISITION);
-        $startupValidation = $this->startupValidation ?? [
+        $evidenceSummaries = $key !== null
+            ? $this->evidenceRepository->summaries($organizationId, $projectId)
+            : [];
+        $capabilityEnabled = $this->capabilityEnabled($organizationId, $projectId);
+        $startupValidation = ($key !== null ? ($this->startupValidations[$key] ?? null) : null) ?? [
             'status' => $capabilityEnabled ? 'pending' : 'not_applicable',
             'checks' => [],
         ];
+        $lastProductionRun = $key !== null ? ($this->lastProductionRuns[$key] ?? null) : null;
         $orchestratorStatus = 'idle';
         $productionRuntime = $capabilityEnabled ? 'idle' : 'inactive';
 
-        if (($this->lastProductionRun['status'] ?? null) === 'running') {
+        if (($lastProductionRun['status'] ?? null) === 'running') {
             $orchestratorStatus = 'running';
             $productionRuntime = 'running';
         } elseif ($capabilityEnabled) {
@@ -123,35 +165,60 @@ final class AcquisitionDiagnostics implements IngestionDiagnosticsInterface
             'source_type_map' => $sourceTypeMap,
             'acquisition_engine_version' => AcquisitionEngine::VERSION,
             'platform_version' => $this->platformVersion,
-            'plugin_version' => $this->pluginVersion,
             'capability_acquisition_enabled' => $capabilityEnabled,
             'collectors' => $collectorIds,
             'default_collector' => $this->collectorRegistry->defaultCollector()?->id() ?? '',
             'parser_handlers' => count($this->parserRegistry->all()),
             'evidence_store' => 'in_memory',
-            'evidence_count' => $this->evidenceRepository->count(),
-            'acquisitions_recorded' => $this->acquisitionCount,
-            'acquisition_failures' => $this->failureCount,
-            'publishing' => 'disabled',
-            'scheduler' => 'disabled',
-            'ai' => 'disabled',
+            'evidence_count' => $key !== null
+                ? $this->evidenceRepository->count($organizationId, $projectId)
+                : 0,
+            'acquisitions_recorded' => $key !== null ? ($this->acquisitionCounts[$key] ?? 0) : 0,
+            'acquisition_failures' => $key !== null ? ($this->failureCounts[$key] ?? 0) : 0,
             'startup_validation' => $startupValidation,
             'production_runtime' => $productionRuntime,
             'production_orchestrator' => [
                 'status' => $orchestratorStatus,
-                'runs_recorded' => $this->productionRunsRecorded,
-                'last_run' => $this->lastProductionRun,
+                'runs_recorded' => $key !== null ? ($this->productionRunsRecorded[$key] ?? 0) : 0,
+                'last_run' => $lastProductionRun,
             ],
             'fingerprint' => $this->fingerprintService->describe(),
             'evidence' => [
                 'store' => 'in_memory',
-                'count' => $this->evidenceRepository->count(),
-                'store_operations' => $this->evidenceRepository->storeOperations(),
+                'count' => $key !== null
+                    ? $this->evidenceRepository->count($organizationId, $projectId)
+                    : 0,
+                'store_operations' => $key !== null
+                    ? $this->evidenceRepository->storeOperations($organizationId, $projectId)
+                    : 0,
                 'entries' => array_slice($evidenceSummaries, 0, self::EVIDENCE_SUMMARY_LIMIT),
             ],
             'last_result' => $last,
-            'last_ingestion' => $this->lastIngestion,
+            'last_ingestion' => $key !== null ? ($this->lastIngestions[$key] ?? null) : null,
         ];
+    }
+
+    private function capabilityEnabled(string $organizationId, string $projectId): bool
+    {
+        if ($this->capabilityGate instanceof CapabilityGate) {
+            return $this->capabilityGate->isEnabledFor(
+                CapabilityGate::ACQUISITION,
+                $organizationId,
+                $projectId,
+            );
+        }
+
+        return $this->capabilityGate->isEnabled(CapabilityGate::ACQUISITION);
+    }
+
+    private function tenantKey(string $organizationId, string $projectId): ?string
+    {
+        $organizationId = trim($organizationId);
+        $projectId = trim($projectId);
+
+        return $organizationId !== '' && $projectId !== ''
+            ? $organizationId."\0".$projectId
+            : null;
     }
 
     /**

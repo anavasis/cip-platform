@@ -17,7 +17,11 @@ final readonly class AcquisitionEngine
     public function acquire(array $request): AcquisitionResult
     {
         $result = $this->manager->acquire($request);
-        $this->diagnostics->recordResult($result);
+        $this->diagnostics->recordResult(
+            (string) ($request['organization_id'] ?? ''),
+            (string) ($request['project_id'] ?? ''),
+            $result,
+        );
 
         return $result;
     }

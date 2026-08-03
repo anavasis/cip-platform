@@ -18,6 +18,8 @@ final readonly class EvidenceCaptured implements DomainEvent
         public string $identityHash,
         public int $httpStatus,
         public int $responseBytes,
+        public string $correlationId = '',
+        public string $runId = '',
     ) {}
 
     public function eventName(): string
@@ -27,7 +29,7 @@ final readonly class EvidenceCaptured implements DomainEvent
 
     public function payload(): array
     {
-        return [
+        $payload = [
             'organization_id' => $this->organizationId,
             'project_id' => $this->projectId,
             'source_id' => $this->sourceId,
@@ -37,5 +39,15 @@ final readonly class EvidenceCaptured implements DomainEvent
             'http_status' => $this->httpStatus,
             'response_bytes' => $this->responseBytes,
         ];
+
+        if ($this->correlationId !== '') {
+            $payload['correlation_id'] = $this->correlationId;
+        }
+
+        if ($this->runId !== '') {
+            $payload['run_id'] = $this->runId;
+        }
+
+        return $payload;
     }
 }

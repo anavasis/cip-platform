@@ -90,7 +90,12 @@ class AcquireSourceJob implements ShouldQueue
                 throw new RuntimeException('source_locked');
             }
 
-            $result = $orchestrator->run($organizationId, $projectId, [$sourceId]);
+            $result = $orchestrator->run(
+                $organizationId,
+                $projectId,
+                [$sourceId],
+                $job->id,
+            );
             $runId = $result->runId();
             $storedRunId = $runs->createRun([
                 'organization_id' => $organizationId,

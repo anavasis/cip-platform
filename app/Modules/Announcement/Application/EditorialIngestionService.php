@@ -190,6 +190,8 @@ final class EditorialIngestionService
     private function recordIngestionDiagnostics(LifecycleBatchResult $result): void
     {
         $this->diagnostics->record([
+            'organization_id' => $this->organizationId,
+            'project_id' => $this->projectId,
             'at' => gmdate('Y-m-d H:i:s'),
             'ok' => $result->success(),
             'source_id' => $result->sourceId(),

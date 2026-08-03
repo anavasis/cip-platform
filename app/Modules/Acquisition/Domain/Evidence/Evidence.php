@@ -40,6 +40,14 @@ final readonly class Evidence
 
     private int $responseBytes;
 
+    private string $organizationId;
+
+    private string $projectId;
+
+    private string $correlationId;
+
+    private string $runId;
+
     /** @param array<string, mixed> $data */
     public function __construct(array $data)
     {
@@ -61,6 +69,10 @@ final readonly class Evidence
         $this->responseBytes = isset($data['response_bytes'])
             ? (int) $data['response_bytes']
             : strlen($this->body);
+        $this->organizationId = isset($data['organization_id']) ? (string) $data['organization_id'] : '';
+        $this->projectId = isset($data['project_id']) ? (string) $data['project_id'] : '';
+        $this->correlationId = isset($data['correlation_id']) ? (string) $data['correlation_id'] : '';
+        $this->runId = isset($data['run_id']) ? (string) $data['run_id'] : '';
     }
 
     public function source(): string
@@ -144,6 +156,26 @@ final readonly class Evidence
         return $this->responseBytes;
     }
 
+    public function organizationId(): string
+    {
+        return $this->organizationId;
+    }
+
+    public function projectId(): string
+    {
+        return $this->projectId;
+    }
+
+    public function correlationId(): string
+    {
+        return $this->correlationId;
+    }
+
+    public function runId(): string
+    {
+        return $this->runId;
+    }
+
     /** @return array<string, mixed> */
     public function toArray(): array
     {
@@ -164,6 +196,10 @@ final readonly class Evidence
             'identity_hash' => $this->identityHash,
             'final_url' => $this->finalUrl,
             'response_bytes' => $this->responseBytes,
+            'organization_id' => $this->organizationId,
+            'project_id' => $this->projectId,
+            'correlation_id' => $this->correlationId,
+            'run_id' => $this->runId,
         ];
     }
 
@@ -187,6 +223,10 @@ final readonly class Evidence
             'identity_hash' => $this->identityHash,
             'final_url' => $this->finalUrl,
             'response_bytes' => $this->responseBytes,
+            'organization_id' => $this->organizationId,
+            'project_id' => $this->projectId,
+            'correlation_id' => $this->correlationId,
+            'run_id' => $this->runId,
         ];
     }
 }

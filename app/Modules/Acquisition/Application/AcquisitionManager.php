@@ -2,11 +2,13 @@
 
 namespace App\Modules\Acquisition\Application;
 
+use App\Application\Services\EventBusService;
 use App\Modules\Acquisition\Domain\AcquisitionResult;
 use App\Modules\Acquisition\Domain\CollectorMetrics;
 use App\Modules\Acquisition\Domain\Collectors\CollectorRegistry;
 use App\Modules\Acquisition\Domain\Evidence\Evidence;
 use App\Modules\Acquisition\Domain\Evidence\EvidenceRepositoryInterface;
+use App\Modules\Acquisition\Domain\Events\EvidenceCaptured;
 use App\Modules\Acquisition\Domain\Fingerprint\FingerprintService;
 use App\Modules\Acquisition\Domain\Registry\ParserRegistry;
 
@@ -21,6 +23,7 @@ final readonly class AcquisitionManager
         private FingerprintService $fingerprintService,
         private EvidenceRepositoryInterface $evidenceRepository,
         private ParserRegistry $parserRegistry,
+        private EventBusService $eventBus,
     ) {}
 
     /** @param array<string, mixed> $request */
@@ -40,7 +43,22 @@ final readonly class AcquisitionManager
             ? (string) $request['source_key']
             : (isset($request['source_id']) ? (string) $request['source_id'] : '');
         $collectorId = isset($request['collector_id']) ? trim((string) $request['collector_id']) : '';
+        $organizationId = trim((string) ($request['organization_id'] ?? ''));
+        $projectId = trim((string) ($request['project_id'] ?? ''));
+        $sourceId = trim((string) ($request['source_id'] ?? $sourceKey));
+        $correlationId = trim((string) ($request['correlation_id'] ?? ''));
+        $runId = trim((string) ($request['run_id'] ?? ''));
         $parser = $this->parserRegistry->resolve($sourceType, $parserProfile);
+
+        if ($organizationId === '' || $projectId === '') {
+            return $this->failureResult(
+                'invalid_tenant',
+                ['invalid_tenant'],
+                $warnings,
+                $startedAt,
+                new CollectorMetrics,
+            );
+        }
 
         if ($parser === null) {
             $errorCode = $sourceType === 'html'
@@ -145,9 +163,25 @@ final readonly class AcquisitionManager
             'response_bytes' => isset($fetchResult['response_size'])
                 ? (int) $fetchResult['response_size']
                 : strlen($body),
+            'organization_id' => $organizationId,
+            'project_id' => $projectId,
+            'correlation_id' => $correlationId,
+            'run_id' => $runId,
         ]);
 
-        $this->evidenceRepository->store($evidence);
+        $evidenceKey = $this->evidenceRepository->store($evidence);
+        $this->eventBus->dispatch(new EvidenceCaptured(
+            $organizationId,
+            $projectId,
+            $sourceId,
+            $evidenceKey,
+            $evidence->contentHash(),
+            $evidence->identityHash(),
+            $evidence->httpStatus(),
+            $evidence->responseBytes(),
+            $correlationId,
+            $runId,
+        ));
         $parseResult = $parser->parse(
             $evidence->body(),
             $evidence->mimeType(),

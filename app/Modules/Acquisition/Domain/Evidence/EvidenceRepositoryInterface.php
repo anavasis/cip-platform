@@ -6,15 +6,15 @@ interface EvidenceRepositoryInterface
 {
     public function store(Evidence $evidence): string;
 
-    public function find(string $key): ?Evidence;
+    public function find(string $organizationId, string $projectId, string $key): ?Evidence;
 
-    public function count(): int;
+    public function count(string $organizationId, string $projectId): int;
 
     /** @return array<string, Evidence> */
-    public function all(): array;
+    public function all(string $organizationId, string $projectId): array;
 
-    public function storeOperations(): int;
+    public function storeOperations(string $organizationId, string $projectId): int;
 
     /** @return array<int, array<string, mixed>> */
-    public function summaries(): array;
+    public function summaries(string $organizationId, string $projectId): array;
 }

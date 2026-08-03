@@ -19,6 +19,7 @@ final readonly class SourceAcquisitionService
         string $organizationId,
         string $projectId,
         string $sourceId,
+        array $context = [],
     ): AcquisitionResult {
         $organizationId = trim($organizationId);
         $projectId = trim($projectId);
@@ -43,6 +44,7 @@ final readonly class SourceAcquisitionService
             $organizationId,
             $projectId,
             $sourceId,
+            $context,
         ));
     }
 
@@ -61,6 +63,7 @@ final readonly class SourceAcquisitionService
         string $organizationId,
         string $projectId,
         string $sourceId,
+        array $context,
     ): array {
         return [
             'organization_id' => $organizationId,
@@ -74,6 +77,12 @@ final readonly class SourceAcquisitionService
                 : '',
             'parser_profile' => isset($source['parser_profile'])
                 ? trim((string) $source['parser_profile'])
+                : '',
+            'correlation_id' => isset($context['correlation_id'])
+                ? trim((string) $context['correlation_id'])
+                : '',
+            'run_id' => isset($context['run_id'])
+                ? trim((string) $context['run_id'])
                 : '',
         ];
     }

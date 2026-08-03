@@ -24,6 +24,8 @@ class AcquisitionDiagnosticsApiTest extends TestCase
         $url = "/api/v1/organizations/{$organization->id}/projects/{$project->id}/acquisition/diagnostics";
 
         app(AcquisitionDiagnostics::class)->record([
+            'organization_id' => $organization->id,
+            'project_id' => $project->id,
             'source_id' => 'source-1',
             'body' => 'secret body',
             'nested' => ['raw_body' => 'secret raw body', 'safe' => true],
@@ -34,7 +36,48 @@ class AcquisitionDiagnosticsApiTest extends TestCase
             ->assertJsonPath('data.evidence_store', 'in_memory')
             ->assertJsonPath('data.last_ingestion.nested.safe', true);
 
-        $this->assertNoBodyKeys($response->json('data'));
+        $data = $response->json('data');
+        $this->assertNoBodyKeys($data);
+        $this->assertArrayNotHasKey('plugin_version', $data);
+        $this->assertArrayNotHasKey('publishing', $data);
+        $this->assertArrayNotHasKey('scheduler', $data);
+        $this->assertArrayNotHasKey('ai', $data);
+    }
+
+    public function test_diagnostics_state_is_partitioned_by_project(): void
+    {
+        ['user' => $owner, 'organization' => $organization] = $this->createUserWithOrg('owner');
+        $projectA = Project::create([
+            'organization_id' => $organization->id,
+            'name' => 'Diagnostics A',
+            'slug' => 'diagnostics-a',
+            'created_by' => $owner->id,
+        ]);
+        $projectB = Project::create([
+            'organization_id' => $organization->id,
+            'name' => 'Diagnostics B',
+            'slug' => 'diagnostics-b',
+            'created_by' => $owner->id,
+        ]);
+        $diagnostics = app(AcquisitionDiagnostics::class);
+        $diagnostics->record([
+            'organization_id' => $organization->id,
+            'project_id' => $projectA->id,
+            'source_id' => 'source-a',
+        ]);
+        $diagnostics->record([
+            'organization_id' => $organization->id,
+            'project_id' => $projectB->id,
+            'source_id' => 'source-b',
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->authToken($owner))
+            ->getJson(
+                "/api/v1/organizations/{$organization->id}/projects/{$projectA->id}/acquisition/diagnostics",
+            )
+            ->assertOk()
+            ->assertJsonPath('data.last_ingestion.source_id', 'source-a')
+            ->assertJsonMissing(['source_id' => 'source-b']);
     }
 
     public function test_diagnostics_requires_acquisition_diagnostics_permission(): void

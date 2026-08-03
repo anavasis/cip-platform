@@ -25,6 +25,7 @@ final readonly class ProductionAcquisitionOrchestrator
         string $organizationId,
         string $projectId,
         array $sourceIds,
+        string $correlationId = '',
     ): AcquisitionRunResult {
         $startedAt = microtime(true);
         $organizationId = trim($organizationId);
@@ -32,21 +33,39 @@ final readonly class ProductionAcquisitionOrchestrator
         $normalizedIds = $this->normalizeSourceIds($sourceIds);
 
         if ($organizationId === '' || $projectId === '' || $normalizedIds === []) {
-            return $this->rejectRun('invalid_request', 0, $startedAt);
+            return $this->rejectRun(
+                'invalid_request',
+                0,
+                $startedAt,
+                $organizationId,
+                $projectId,
+            );
         }
 
         $tenantGate = $this->tenantGate($organizationId, $projectId);
 
         if (! $tenantGate->isEnabled(CapabilityGate::ACQUISITION)) {
-            return $this->rejectRun('capability_disabled', count($normalizedIds), $startedAt);
+            return $this->rejectRun(
+                'capability_disabled',
+                count($normalizedIds),
+                $startedAt,
+                $organizationId,
+                $projectId,
+            );
         }
 
         if (! $this->startupReady($tenantGate)) {
-            return $this->rejectRun('startup_validation_failed', count($normalizedIds), $startedAt);
+            return $this->rejectRun(
+                'startup_validation_failed',
+                count($normalizedIds),
+                $startedAt,
+                $organizationId,
+                $projectId,
+            );
         }
 
         $runId = $this->generateRunId();
-        $this->diagnostics->recordProductionRun([
+        $this->diagnostics->recordProductionRun($organizationId, $projectId, [
             'run_id' => $runId,
             'status' => 'running',
             'error_code' => '',
@@ -64,6 +83,10 @@ final readonly class ProductionAcquisitionOrchestrator
                 $organizationId,
                 $projectId,
                 $sourceId,
+                [
+                    'correlation_id' => $correlationId,
+                    'run_id' => $runId,
+                ],
             );
             $sourceSuccess = $acquisition->success();
 
@@ -91,7 +114,7 @@ final readonly class ProductionAcquisitionOrchestrator
             'duration_ms' => (microtime(true) - $startedAt) * 1000,
         ]);
 
-        $this->diagnostics->recordProductionRun([
+        $this->diagnostics->recordProductionRun($organizationId, $projectId, [
             'run_id' => $runResult->runId(),
             'status' => 'completed',
             'error_code' => '',
@@ -171,6 +194,8 @@ final readonly class ProductionAcquisitionOrchestrator
         string $errorCode,
         int $sourcesRequested,
         float $startedAt,
+        string $organizationId,
+        string $projectId,
     ): AcquisitionRunResult {
         $result = new AcquisitionRunResult([
             'success' => false,
@@ -183,7 +208,7 @@ final readonly class ProductionAcquisitionOrchestrator
             'duration_ms' => (microtime(true) - $startedAt) * 1000,
         ]);
 
-        $this->diagnostics->recordProductionRun([
+        $this->diagnostics->recordProductionRun($organizationId, $projectId, [
             'run_id' => $result->runId(),
             'status' => 'gate_rejected',
             'error_code' => $result->errorCode(),
