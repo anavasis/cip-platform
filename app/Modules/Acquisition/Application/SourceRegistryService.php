@@ -19,6 +19,7 @@ final readonly class SourceRegistryService
     public function __construct(
         private SourceRepositoryInterface $repository,
         private ?EventBusService $eventBus = null,
+        private ?AcquisitionScheduleRegistrar $scheduleRegistrar = null,
     ) {}
 
     /**
@@ -125,6 +126,7 @@ final readonly class SourceRegistryService
         ));
 
         if ($this->booleanValue($input['enabled'] ?? false)) {
+            $this->scheduleRegistrar?->ensureForProject($organizationId, $projectId);
             $this->eventBus?->dispatch(new SourceEnabled(
                 $organizationId,
                 $projectId,
@@ -238,6 +240,10 @@ final readonly class SourceRegistryService
         $updated = $this->repository->update($sourceId, $updates);
 
         if ($updated) {
+            if (($updates['enabled'] ?? false) === true) {
+                $this->scheduleRegistrar?->ensureForProject($organizationId, $projectId);
+            }
+
             $changedFields = [];
 
             foreach (array_keys($updates) as $field) {
@@ -287,6 +293,10 @@ final readonly class SourceRegistryService
 
         if (! $this->repository->setEnabled($organizationId, $projectId, $sourceId, $enabled)) {
             return ['success' => false, 'error' => 'database'];
+        }
+
+        if ($enabled) {
+            $this->scheduleRegistrar?->ensureForProject($organizationId, $projectId);
         }
 
         $this->dispatchToggleEvent($organizationId, $projectId, $sourceId, $enabled);

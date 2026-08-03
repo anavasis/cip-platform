@@ -3,6 +3,7 @@
 namespace App\Modules\Acquisition\Infrastructure\Persistence\Models;
 
 use App\Domain\Shared\Concerns\HasUuid;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 
 class Source extends Model
@@ -38,5 +39,24 @@ class Source extends Model
             'last_acquired_at' => 'datetime',
             'last_checked_at' => 'datetime',
         ];
+    }
+
+    public function isDueForAcquisition(?CarbonInterface $at = null): bool
+    {
+        $lastAcquired = $this->last_acquired_at;
+        $lastChecked = $this->last_checked_at;
+        $lastAttempt = $lastChecked !== null
+            && ($lastAcquired === null || $lastChecked->greaterThan($lastAcquired))
+                ? $lastChecked
+                : $lastAcquired;
+
+        if ($lastAttempt === null) {
+            return true;
+        }
+
+        return $lastAttempt
+            ->copy()
+            ->addSeconds(max(1, (int) $this->acquire_interval_seconds))
+            ->lessThanOrEqualTo($at ?? now());
     }
 }

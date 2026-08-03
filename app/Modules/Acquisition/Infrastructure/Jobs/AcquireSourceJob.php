@@ -5,14 +5,17 @@ namespace App\Modules\Acquisition\Infrastructure\Jobs;
 use App\Application\Services\EventBusService;
 use App\Application\Services\JobEngineService;
 use App\Infrastructure\Persistence\Models\PlatformJob;
+use App\Modules\Acquisition\Application\CapabilityGate;
 use App\Modules\Acquisition\Application\ProductionAcquisitionOrchestrator;
 use App\Modules\Acquisition\Domain\Events\AcquisitionRunCompleted;
 use App\Modules\Acquisition\Domain\Events\AcquisitionRunFailed;
 use App\Modules\Acquisition\Domain\Events\AcquisitionRunStarted;
 use App\Modules\Acquisition\Domain\Sources\SourceRepositoryInterface;
+use App\Modules\Acquisition\Infrastructure\Persistence\Models\Source;
 use App\Modules\Acquisition\Infrastructure\Persistence\Repositories\EloquentAcquisitionRunRepository;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 use Throwable;
 
@@ -28,6 +31,7 @@ class AcquireSourceJob implements ShouldQueue
         ProductionAcquisitionOrchestrator $orchestrator,
         EloquentAcquisitionRunRepository $runs,
         SourceRepositoryInterface $sources,
+        CapabilityGate $capabilityGate,
     ): void {
         $job = PlatformJob::findOrFail($this->platformJobId);
         $job = $jobEngine->markRunning($job);
@@ -36,10 +40,54 @@ class AcquireSourceJob implements ShouldQueue
         $projectId = trim((string) ($payload['project_id'] ?? $job->project_id ?? ''));
         $sourceId = trim((string) ($payload['source_id'] ?? ''));
         $runId = $job->id;
+        $sourceLock = null;
+        $lockAcquired = false;
 
         try {
             if ($organizationId === '' || $projectId === '' || $sourceId === '') {
                 throw new RuntimeException('invalid_payload');
+            }
+
+            $source = Source::query()
+                ->where('organization_id', $organizationId)
+                ->where('project_id', $projectId)
+                ->whereKey($sourceId)
+                ->first();
+
+            if ($source !== null && ! $source->enabled) {
+                throw new RuntimeException('source_disabled');
+            }
+
+            if ($source !== null && $source->manual_only) {
+                throw new RuntimeException('source_manual_only');
+            }
+
+            if (! $capabilityGate->isEnabledFor(
+                CapabilityGate::ACQUISITION,
+                $organizationId,
+                $projectId,
+            ) || ! $capabilityGate->isEnabledFor(
+                CapabilityGate::SOURCE_REGISTRY,
+                $organizationId,
+                $projectId,
+            )) {
+                throw new RuntimeException('capability_disabled');
+            }
+
+            if ($source !== null
+                && ($payload['require_due'] ?? false) === true
+                && ! $source->isDueForAcquisition()) {
+                throw new RuntimeException('source_not_due');
+            }
+
+            $sourceLock = Cache::lock(
+                "acquisition:project:{$projectId}:source:{$sourceId}",
+                900,
+            );
+            $lockAcquired = $sourceLock->get();
+
+            if (! $lockAcquired) {
+                throw new RuntimeException('source_locked');
             }
 
             $result = $orchestrator->run($organizationId, $projectId, [$sourceId]);
@@ -144,6 +192,10 @@ class AcquireSourceJob implements ShouldQueue
             }
 
             $jobEngine->markFailed($job, $errorCode);
+        } finally {
+            if ($lockAcquired) {
+                $sourceLock?->release();
+            }
         }
     }
 }

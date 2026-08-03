@@ -3,9 +3,12 @@
 namespace App\Providers;
 
 use App\Application\Services\FeatureFlagService;
+use App\Application\Services\SchedulerService;
 use App\Modules\Acquisition\Application\AcquisitionDiagnostics;
+use App\Modules\Acquisition\Application\AcquisitionAwareSchedulerService;
 use App\Modules\Acquisition\Application\AcquisitionEngine;
 use App\Modules\Acquisition\Application\AcquisitionManager;
+use App\Modules\Acquisition\Application\AcquisitionScheduleRegistrar;
 use App\Modules\Acquisition\Application\CapabilityGate;
 use App\Modules\Acquisition\Application\DownloadManager;
 use App\Modules\Acquisition\Application\ProductionAcquisitionOrchestrator;
@@ -27,7 +30,6 @@ use App\Modules\Acquisition\Infrastructure\Evidence\InMemoryEvidenceRepository;
 use App\Modules\Acquisition\Infrastructure\Http\FeedFetcherInterface;
 use App\Modules\Acquisition\Infrastructure\Http\LaravelSafeFeedFetcher;
 use App\Modules\Acquisition\Infrastructure\Http\SafeUrlGuard;
-use App\Modules\Acquisition\Infrastructure\Jobs\AcquireDueSourcesJob;
 use App\Modules\Acquisition\Infrastructure\Persistence\Models\AcquisitionRun;
 use App\Modules\Acquisition\Infrastructure\Persistence\Models\Source;
 use App\Modules\Acquisition\Infrastructure\Persistence\Repositories\EloquentAcquisitionRunRepository;
@@ -44,7 +46,6 @@ use App\Modules\Announcement\Domain\Contracts\IngestionDiagnosticsInterface;
 use App\Modules\Announcement\Domain\Contracts\ParserRegistryInterface;
 use App\Modules\Announcement\Infrastructure\Persistence\Models\Announcement;
 use App\Modules\Announcement\Infrastructure\Persistence\Repositories\EloquentAnnouncementRepository;
-use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
@@ -101,6 +102,7 @@ class AnnouncementAcquisitionServiceProvider extends ServiceProvider
         );
         $this->app->alias(CapabilityGate::class, AcquisitionCapabilityGateInterface::class);
         $this->app->alias(CapabilityGate::class, AnnouncementCapabilityGateInterface::class);
+        $this->app->singleton(SchedulerService::class, AcquisitionAwareSchedulerService::class);
 
         $this->app->singleton(AcquisitionDiagnostics::class, function ($app): AcquisitionDiagnostics {
             return new AcquisitionDiagnostics(
@@ -118,6 +120,7 @@ class AnnouncementAcquisitionServiceProvider extends ServiceProvider
             AcquisitionEngine::class,
             SourceAcquisitionService::class,
             ProductionAcquisitionOrchestrator::class,
+            AcquisitionScheduleRegistrar::class,
             SourceRegistryService::class,
             SourceConnectivityService::class,
             AnnouncementIdentityService::class,
@@ -166,15 +169,6 @@ class AnnouncementAcquisitionServiceProvider extends ServiceProvider
         Route::bind('acquisition_run', $acquisitionRunBinding);
         Route::bind('acquisitionRun', $acquisitionRunBinding);
 
-        $this->app->booted(function (): void {
-            if (! $this->app->runningInConsole()) {
-                return;
-            }
-
-            $this->app->make(Schedule::class)
-                ->job(new AcquireDueSourcesJob)
-                ->everyFiveMinutes();
-        });
     }
 
     /** @return array{0: string, 1: string} */
