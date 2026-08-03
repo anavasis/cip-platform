@@ -7,20 +7,21 @@ use App\Infrastructure\Persistence\Models\StoredEvent;
 use App\Modules\Acquisition\Application\SourceAcquisitionService;
 use App\Modules\Acquisition\Domain\Evidence\EvidenceRepositoryInterface;
 use App\Modules\Acquisition\Infrastructure\Persistence\Models\Source;
-use Illuminate\Support\Facades\Http;
+use Tests\Feature\Modules\Acquisition\Support\AcquisitionHttpTestBindings;
+use Tests\Feature\Modules\Acquisition\Support\SequencedFeedFetcher;
 use Tests\TestCase;
 
 class EvidenceCapturedTest extends TestCase
 {
     public function test_evidence_is_tenant_partitioned_and_emits_metadata_only_event(): void
     {
-        Http::fake([
-            'http://93.184.216.34/feed.xml' => Http::response(
-                $this->rssBody(),
-                200,
-                ['Content-Type' => 'application/rss+xml'],
-            ),
-        ]);
+        AcquisitionHttpTestBindings::bindFeedFetcher($this->app, new SequencedFeedFetcher([
+            [
+                'success' => true,
+                'body' => $this->rssBody(),
+                'content_type' => 'application/rss+xml',
+            ],
+        ]));
         ['user' => $owner, 'organization' => $organization] = $this->createUserWithOrg();
         $project = $this->createProject($organization->id, $owner->id, 'Evidence');
         $otherProject = $this->createProject($organization->id, $owner->id, 'Other');

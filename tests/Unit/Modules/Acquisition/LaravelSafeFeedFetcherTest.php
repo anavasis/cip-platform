@@ -2,60 +2,88 @@
 
 namespace Tests\Unit\Modules\Acquisition;
 
+use App\Modules\Acquisition\Infrastructure\Http\CurlPinnedHttpTransport;
 use App\Modules\Acquisition\Infrastructure\Http\LaravelSafeFeedFetcher;
 use App\Modules\Acquisition\Infrastructure\Http\SafeUrlGuard;
-use Illuminate\Support\Facades\Http;
+use GuzzleHttp\Handler\CurlHandler;
+use GuzzleHttp\Handler\StreamHandler;
+use GuzzleHttp\HandlerStack;
 use Tests\TestCase;
 
 class LaravelSafeFeedFetcherTest extends TestCase
 {
-    public function test_validated_address_is_pinned_into_curl_transport_options(): void
+    public function test_transport_constructs_explicit_curl_handler_without_stream_handler(): void
     {
-        $resolutionCalls = 0;
-        $capturedOptions = [];
-        $capturedHost = '';
-        $guard = new SafeUrlGuard(
-            static function (string $host) use (&$resolutionCalls): array {
-                $resolutionCalls++;
+        $transport = new CurlPinnedHttpTransport;
+        $client = $transport->createCurlClient();
 
-                return $resolutionCalls === 1
-                    ? ['93.184.216.34']
-                    : ['127.0.0.1'];
-            },
-        );
-        Http::fake(function ($request, array $options) use (&$capturedOptions, &$capturedHost) {
-            $capturedOptions = $options;
-            $capturedHost = (string) $request->header('Host')[0];
+        $this->assertTrue($transport->usesCurlHandler($client));
 
-            return Http::response('<rss/>', 200, ['Content-Type' => 'application/rss+xml']);
-        });
+        $stack = $client->getConfig('handler');
+        $this->assertInstanceOf(HandlerStack::class, $stack);
 
-        $result = (new LaravelSafeFeedFetcher($guard))->fetch(
+        $reflection = new \ReflectionClass($stack);
+        $property = $reflection->getProperty('handler');
+        $property->setAccessible(true);
+        $handler = $property->getValue($stack);
+
+        $this->assertInstanceOf(CurlHandler::class, $handler);
+        $this->assertNotInstanceOf(StreamHandler::class, $handler);
+    }
+
+    public function test_missing_curl_fails_closed_with_normalized_transport_error(): void
+    {
+        $transport = new class extends CurlPinnedHttpTransport
+        {
+            public function assertCurlTransportAvailable(): void
+            {
+                throw new \RuntimeException('curl_extension_unavailable');
+            }
+        };
+        $guard = new SafeUrlGuard(static fn (string $host): array => ['93.184.216.34']);
+        $result = (new LaravelSafeFeedFetcher($guard, $transport))->fetch(
             'https://feeds.example.test/rss',
             ['feeds.example.test'],
         );
-        $resolveOption = defined('CURLOPT_RESOLVE') ? constant('CURLOPT_RESOLVE') : 10203;
 
-        $this->assertTrue($result['success']);
-        $this->assertSame(1, $resolutionCalls);
-        $this->assertSame(
-            ['feeds.example.test:443:93.184.216.34'],
-            $capturedOptions['curl'][$resolveOption],
-        );
-        $this->assertFalse($capturedOptions['allow_redirects']);
-        $this->assertTrue($capturedOptions['verify']);
-        $this->assertSame('feeds.example.test', $capturedHost);
+        $this->assertFalse($result['success']);
+        $this->assertSame('transport_error', $result['error_code']);
+        $this->assertSame('', $result['body']);
     }
 
-    public function test_redirect_target_is_revalidated_and_private_ip_is_blocked(): void
+    public function test_validated_address_is_pinned_into_curl_resolve_string(): void
     {
-        Http::fake([
-            'http://93.184.216.34/feed' => Http::response('', 302, [
-                'Location' => 'http://127.0.0.1/internal',
-            ]),
-        ]);
+        $transport = new CurlPinnedHttpTransport;
+        $connection = $transport->pinnedConnection('https://feeds.example.test/rss', ['93.184.216.34']);
 
-        $result = (new LaravelSafeFeedFetcher(new SafeUrlGuard))->fetch(
+        $this->assertNotNull($connection);
+        $this->assertSame('feeds.example.test:443:93.184.216.34', $connection['resolve']);
+        $this->assertSame('feeds.example.test', $connection['host_header']);
+    }
+
+    public function test_redirect_target_is_revalidated_and_private_ip_is_blocked_without_follow(): void
+    {
+        $transport = new class extends CurlPinnedHttpTransport
+        {
+            public int $calls = 0;
+
+            public function get(string $url, array $validatedIps, array $options): array
+            {
+                $this->calls++;
+
+                return [
+                    'transport_error' => '',
+                    'status_code' => 302,
+                    'content_type' => '',
+                    'location' => 'http://127.0.0.1/internal',
+                    'body' => '',
+                    'truncated_prefix' => '',
+                    'body_size' => 0,
+                    'body_too_large' => false,
+                ];
+            }
+        };
+        $result = (new LaravelSafeFeedFetcher(new SafeUrlGuard, $transport))->fetch(
             'http://93.184.216.34/feed',
             ['93.184.216.34', '127.0.0.1'],
         );
@@ -64,13 +92,45 @@ class LaravelSafeFeedFetcherTest extends TestCase
         $this->assertSame('redirect_blocked', $result['error_code']);
         $this->assertSame(302, $result['http_status']);
         $this->assertSame('', $result['body']);
-        Http::assertSentCount(1);
-        Http::assertNotSent(static fn ($request): bool => str_contains($request->url(), '127.0.0.1'));
+        $this->assertSame(1, $transport->calls);
     }
 
     public function test_each_redirect_hop_is_revalidated_and_repinned(): void
     {
         $pins = [];
+        $transport = new class($pins) extends CurlPinnedHttpTransport
+        {
+            /** @param array<int, string> $pins */
+            public function __construct(private array &$pins) {}
+
+            public function get(string $url, array $validatedIps, array $options): array
+            {
+                $connection = $this->pinnedConnection($url, $validatedIps);
+                $this->pins[] = $connection['resolve'] ?? '';
+
+                return str_contains($url, 'one.example.test')
+                    ? [
+                        'transport_error' => '',
+                        'status_code' => 302,
+                        'content_type' => '',
+                        'location' => 'https://two.example.test/feed',
+                        'body' => '',
+                        'truncated_prefix' => '',
+                        'body_size' => 0,
+                        'body_too_large' => false,
+                    ]
+                    : [
+                        'transport_error' => '',
+                        'status_code' => 200,
+                        'content_type' => 'application/rss+xml',
+                        'location' => '',
+                        'body' => '<rss/>',
+                        'truncated_prefix' => '',
+                        'body_size' => 6,
+                        'body_too_large' => false,
+                    ];
+            }
+        };
         $guard = new SafeUrlGuard(
             static fn (string $host): array => match ($host) {
                 'one.example.test' => ['93.184.216.34'],
@@ -78,16 +138,8 @@ class LaravelSafeFeedFetcherTest extends TestCase
                 default => [],
             },
         );
-        Http::fake(function ($request, array $options) use (&$pins) {
-            $resolveOption = defined('CURLOPT_RESOLVE') ? constant('CURLOPT_RESOLVE') : 10203;
-            $pins[] = $options['curl'][$resolveOption][0];
 
-            return str_contains($request->url(), 'one.example.test')
-                ? Http::response('', 302, ['Location' => 'https://two.example.test/feed'])
-                : Http::response('<rss/>', 200, ['Content-Type' => 'application/rss+xml']);
-        });
-
-        $result = (new LaravelSafeFeedFetcher($guard))->fetch(
+        $result = (new LaravelSafeFeedFetcher($guard, $transport))->fetch(
             'https://one.example.test/feed',
             ['one.example.test', 'two.example.test'],
         );
@@ -97,5 +149,23 @@ class LaravelSafeFeedFetcherTest extends TestCase
             'one.example.test:443:93.184.216.34',
             'two.example.test:443:1.1.1.1',
         ], $pins);
+    }
+
+    public function test_fetcher_source_forbids_stream_handler_fallback(): void
+    {
+        $fetcher = (string) file_get_contents(base_path(
+            'app/Modules/Acquisition/Infrastructure/Http/LaravelSafeFeedFetcher.php',
+        ));
+        $transport = (string) file_get_contents(base_path(
+            'app/Modules/Acquisition/Infrastructure/Http/CurlPinnedHttpTransport.php',
+        ));
+
+        $this->assertStringContainsString('CurlPinnedHttpTransport', $fetcher);
+        $this->assertStringNotContainsString('Illuminate\\Support\\Facades\\Http', $fetcher);
+        $this->assertStringContainsString('new CurlHandler', $transport);
+        $this->assertStringContainsString('stream_handler_forbidden', $transport);
+        $this->assertStringContainsString('CURLOPT_RESOLVE', $transport);
+        $this->assertStringContainsString("'allow_redirects' => false", $transport);
+        $this->assertStringContainsString('CURLOPT_FOLLOWLOCATION => false', $transport);
     }
 }

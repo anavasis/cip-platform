@@ -2,9 +2,6 @@
 
 namespace App\Modules\Acquisition\Infrastructure\Http;
 
-use Illuminate\Support\Facades\Http;
-use Psr\Http\Message\StreamInterface;
-
 final class LaravelSafeFeedFetcher implements FeedFetcherInterface
 {
     private const TIMEOUT_SECONDS = 8;
@@ -29,7 +26,10 @@ final class LaravelSafeFeedFetcher implements FeedFetcherInterface
 
     private const AUDIT_ACCEPT_HEADER = 'application/rss+xml, application/atom+xml, text/html;q=0.9, application/xml;q=0.8, text/xml;q=0.8, */*;q=0.5';
 
-    public function __construct(private readonly SafeUrlGuard $urlGuard) {}
+    public function __construct(
+        private readonly SafeUrlGuard $urlGuard,
+        private readonly CurlPinnedHttpTransport $transport = new CurlPinnedHttpTransport,
+    ) {}
 
     public function fetch(string $url, array $allowedDomains): array
     {
@@ -325,67 +325,11 @@ final class LaravelSafeFeedFetcher implements FeedFetcherInterface
         string $accept,
         int $classificationPrefixBytes = 0,
     ): array {
-        try {
-            $connection = $this->pinnedConnection($url, $validatedIps);
+        $connection = $this->transport->pinnedConnection($url, $validatedIps);
 
-            if ($connection === null) {
-                throw new \RuntimeException('validated_address_missing');
-            }
-
-            $curlResolveOption = defined('CURLOPT_RESOLVE') ? constant('CURLOPT_RESOLVE') : 10203;
-            $response = Http::withOptions([
-                'allow_redirects' => false,
-                'verify' => true,
-                'cookies' => false,
-                'stream' => true,
-                'connect_timeout' => $timeout,
-                'curl' => [
-                    $curlResolveOption => [$connection['resolve']],
-                ],
-            ])
-                ->timeout($timeout)
-                ->withHeaders([
-                    'Host' => $connection['host_header'],
-                    'User-Agent' => self::USER_AGENT,
-                    'Accept' => $accept,
-                ])
-                ->get($url);
-
-            $statusCode = $response->status();
-            $contentType = $this->normalizeContentType((string) $response->header('Content-Type'));
-            $location = $this->sanitizeHeader((string) $response->header('Location'));
-            $contentLength = $this->parseContentLength((string) $response->header('Content-Length'));
-            $declaredTooLarge = $contentLength > $maxBodyBytes;
-            $readLimit = $declaredTooLarge && $classificationPrefixBytes > 0
-                ? $classificationPrefixBytes
-                : $maxBodyBytes + 1;
-            $body = $this->readResponseBody($response->toPsrResponse()->getBody(), $readLimit);
-            $bodySize = strlen($body);
-            $bodyTooLarge = $declaredTooLarge || $bodySize > $maxBodyBytes;
-            $truncatedPrefix = $bodyTooLarge && $classificationPrefixBytes > 0
-                ? substr($body, 0, $classificationPrefixBytes)
-                : '';
-
-            if ($bodyTooLarge) {
-                $body = '';
-                $bodySize = $classificationPrefixBytes > 0
-                    ? $maxBodyBytes + 1
-                    : max($contentLength, $bodySize);
-            }
-
+        if ($connection === null) {
             return [
-                'transport_error' => '',
-                'status_code' => $statusCode,
-                'content_type' => $contentType,
-                'location' => $location,
-                'body' => $body,
-                'truncated_prefix' => $truncatedPrefix,
-                'body_size' => $bodySize,
-                'body_too_large' => $bodyTooLarge,
-            ];
-        } catch (\Throwable $throwable) {
-            return [
-                'transport_error' => $throwable->getMessage() !== '' ? $throwable->getMessage() : 'request_failed',
+                'transport_error' => 'validated_address_missing',
                 'status_code' => 0,
                 'content_type' => '',
                 'location' => '',
@@ -395,105 +339,16 @@ final class LaravelSafeFeedFetcher implements FeedFetcherInterface
                 'body_too_large' => false,
             ];
         }
-    }
 
-    /**
-     * @param  array<int, string>  $validatedIps
-     * @return array{resolve: string, host_header: string}|null
-     */
-    private function pinnedConnection(string $url, array $validatedIps): ?array
-    {
-        $parts = parse_url($url);
-
-        if (! is_array($parts) || ! isset($parts['scheme'], $parts['host'])) {
-            return null;
-        }
-
-        $scheme = strtolower((string) $parts['scheme']);
-        $host = trim((string) $parts['host'], '[]');
-        $port = isset($parts['port'])
-            ? (int) $parts['port']
-            : ($scheme === 'https' ? 443 : 80);
-        $ips = [];
-
-        foreach ($validatedIps as $ip) {
-            if (! is_string($ip) || filter_var($ip, FILTER_VALIDATE_IP) === false) {
-                continue;
-            }
-
-            $normalized = strtolower(trim($ip, '[]'));
-            $ips[$normalized] = str_contains($normalized, ':')
-                ? "[{$normalized}]"
-                : $normalized;
-        }
-
-        if ($host === '' || $port < 1 || $port > 65535 || $ips === []) {
-            return null;
-        }
-
-        $defaultPort = ($scheme === 'http' && $port === 80)
-            || ($scheme === 'https' && $port === 443);
-        $hostHeader = str_contains($host, ':') ? "[{$host}]" : $host;
-
-        return [
-            'resolve' => "{$host}:{$port}:".implode(',', array_values($ips)),
-            'host_header' => $hostHeader.($defaultPort ? '' : ':'.$port),
-        ];
-    }
-
-    private function readResponseBody(StreamInterface $stream, int $limit): string
-    {
-        $body = '';
-
-        while (! $stream->eof() && strlen($body) < $limit) {
-            $remaining = $limit - strlen($body);
-            $chunk = $stream->read(min(8192, $remaining));
-
-            if ($chunk === '') {
-                break;
-            }
-
-            $body .= $chunk;
-        }
-
-        return $body;
-    }
-
-    private function normalizeContentType(string $contentType): string
-    {
-        $separator = strpos($contentType, ';');
-
-        return trim($separator === false ? $contentType : substr($contentType, 0, $separator));
-    }
-
-    private function sanitizeHeader(string $value): string
-    {
-        $value = trim($value);
-
-        if (strlen($value) > 2048 || preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $value) === 1) {
-            return '';
-        }
-
-        return $value;
-    }
-
-    private function parseContentLength(string $value): int
-    {
-        if (preg_match('/^[0-9]+$/', trim($value)) !== 1) {
-            return 0;
-        }
-
-        $normalized = ltrim(trim($value), '0');
-
-        if ($normalized === '') {
-            return 0;
-        }
-
-        if (strlen($normalized) > 18) {
-            return PHP_INT_MAX;
-        }
-
-        return min(PHP_INT_MAX, (int) $normalized);
+        return $this->transport->get($url, $validatedIps, [
+            'timeout' => $timeout,
+            'max_body_bytes' => $maxBodyBytes,
+            'accept' => $accept,
+            'user_agent' => self::USER_AGENT,
+            'host_header' => $connection['host_header'],
+            'resolve' => $connection['resolve'],
+            'classification_prefix_bytes' => $classificationPrefixBytes,
+        ]);
     }
 
     private function resolveRedirectLocation(string $currentUrl, string $location): string
@@ -788,6 +643,13 @@ final class LaravelSafeFeedFetcher implements FeedFetcherInterface
         }
 
         return $mimeType;
+    }
+
+    private function normalizeContentType(string $contentType): string
+    {
+        $separator = strpos($contentType, ';');
+
+        return trim($separator === false ? $contentType : substr($contentType, 0, $separator));
     }
 
     /** @return array<string, mixed> */

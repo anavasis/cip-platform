@@ -5,14 +5,12 @@ namespace Tests\Feature\Modules\Acquisition;
 use App\Infrastructure\Persistence\Models\Project;
 use App\Modules\Acquisition\Application\SourceAcquisitionService;
 use App\Modules\Acquisition\Infrastructure\Persistence\Models\Source;
-use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class AcquisitionSsrfTest extends TestCase
 {
     public function test_acquisition_blocks_allowlisted_loopback_before_http_request(): void
     {
-        Http::fake();
         ['user' => $owner, 'organization' => $organization] = $this->createUserWithOrg();
         $project = Project::create([
             'organization_id' => $organization->id,
@@ -43,6 +41,5 @@ class AcquisitionSsrfTest extends TestCase
         $this->assertFalse($result->success());
         $this->assertSame('url_blocked', $result->errorCode());
         $this->assertSame('', $result->fetchResult()['body']);
-        Http::assertNothingSent();
     }
 }

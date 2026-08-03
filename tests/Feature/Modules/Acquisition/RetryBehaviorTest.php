@@ -15,7 +15,8 @@ use App\Modules\Acquisition\Infrastructure\Persistence\Models\AcquisitionRun;
 use App\Modules\Acquisition\Infrastructure\Persistence\Models\Source;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Event;
-use Illuminate\Support\Facades\Http;
+use Tests\Feature\Modules\Acquisition\Support\AcquisitionHttpTestBindings;
+use Tests\Feature\Modules\Acquisition\Support\SequencedFeedFetcher;
 use Tests\TestCase;
 
 class RetryBehaviorTest extends TestCase
@@ -23,9 +24,22 @@ class RetryBehaviorTest extends TestCase
     public function test_retryable_transport_failure_is_rethrown_and_queue_retry_succeeds(): void
     {
         config(['queue.default' => 'database']);
-        Http::fakeSequence()
-            ->push('', 503, ['Content-Type' => 'text/plain'])
-            ->push($this->rssBody(), 200, ['Content-Type' => 'application/rss+xml']);
+        $fetcher = new SequencedFeedFetcher([
+            [
+                'success' => false,
+                'error_code' => 'http_error',
+                'http_status' => 503,
+                'content_type' => 'text/plain',
+                'body' => '',
+                'response_size' => 0,
+            ],
+            [
+                'success' => true,
+                'body' => $this->rssBody(),
+                'content_type' => 'application/rss+xml',
+            ],
+        ]);
+        AcquisitionHttpTestBindings::bindFeedFetcher($this->app, $fetcher);
         ['user' => $owner, 'organization' => $organization] = $this->createUserWithOrg();
         $project = Project::create([
             'organization_id' => $organization->id,

@@ -11,16 +11,27 @@ use App\Modules\Acquisition\Application\CapabilityGate;
 use App\Modules\Acquisition\Infrastructure\Jobs\AcquireSourceJob;
 use App\Modules\Acquisition\Infrastructure\Jobs\IngestSourceJob;
 use App\Modules\Acquisition\Infrastructure\Persistence\Models\Source;
-use Illuminate\Support\Facades\Http;
+use Tests\Feature\Modules\Acquisition\Support\AcquisitionHttpTestBindings;
+use Tests\Feature\Modules\Acquisition\Support\SequencedFeedFetcher;
 use Tests\TestCase;
 
 class AcquisitionJobTest extends TestCase
 {
     public function test_acquire_and_ingest_jobs_complete_via_sync_queue(): void
     {
-        Http::fakeSequence()
-            ->push($this->rssBody(), 200, ['Content-Type' => 'application/rss+xml'])
-            ->push($this->rssBody(), 200, ['Content-Type' => 'application/rss+xml']);
+        $fetcher = new SequencedFeedFetcher([
+            [
+                'success' => true,
+                'body' => $this->rssBody(),
+                'content_type' => 'application/rss+xml',
+            ],
+            [
+                'success' => true,
+                'body' => $this->rssBody(),
+                'content_type' => 'application/rss+xml',
+            ],
+        ]);
+        AcquisitionHttpTestBindings::bindFeedFetcher($this->app, $fetcher);
         ['user' => $owner, 'organization' => $organization] = $this->createUserWithOrg();
         $project = Project::create([
             'organization_id' => $organization->id,
@@ -78,7 +89,7 @@ class AcquisitionJobTest extends TestCase
             'raw_title' => 'Job announcement',
             'revision_no' => 1,
         ]);
-        Http::assertSentCount(2);
+        $this->assertSame(2, $fetcher->sentCount());
     }
 
     private function createSource(string $organizationId, string $projectId): Source

@@ -47,10 +47,17 @@ class AcquisitionArchitectureTest extends TestCase
         $fetcher = $this->contents(
             'app/Modules/Acquisition/Infrastructure/Http/LaravelSafeFeedFetcher.php',
         );
+        $transport = $this->contents(
+            'app/Modules/Acquisition/Infrastructure/Http/CurlPinnedHttpTransport.php',
+        );
 
         $this->assertStringContainsString("'ips' => \$resolvedAddresses", $guard);
-        $this->assertStringContainsString('CURLOPT_RESOLVE', $fetcher);
-        $this->assertStringContainsString("'allow_redirects' => false", $fetcher);
+        $this->assertStringContainsString('CurlPinnedHttpTransport', $fetcher);
+        $this->assertStringContainsString('CURLOPT_RESOLVE', $transport);
+        $this->assertStringContainsString("'allow_redirects' => false", $transport);
+        $this->assertStringContainsString('new CurlHandler', $transport);
+        $this->assertStringNotContainsString('Utils::chooseHandler', $transport);
+        $this->assertStringContainsString('stream_handler_forbidden', $transport);
     }
 
     public function test_migrated_modules_have_no_wordpress_runtime_leakage(): void
