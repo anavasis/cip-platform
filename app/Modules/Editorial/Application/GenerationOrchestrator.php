@@ -58,7 +58,7 @@ final class GenerationOrchestrator
      * @param  array<string, mixed>  $announcementItem
      * @return array<string, mixed>
      */
-    public function generateFromAnnouncement(array $announcementItem): array
+    public function generateFromAnnouncement(array $announcementItem, array $options = []): array
     {
         $stages = [
             'build_001' => false,
@@ -136,10 +136,15 @@ final class GenerationOrchestrator
                 'response_format' => GenerationParameters::FORMAT_TEXT,
                 'seed' => 1,
             ]);
+            $requestOverrides = [];
+            if (isset($options['lineage_id']) && trim((string) $options['lineage_id']) !== '') {
+                $requestOverrides['lineage_id'] = trim((string) $options['lineage_id']);
+            }
             $request = $this->generationRequestBuilder->buildFromPackage(
                 $package,
                 $modelReference,
-                $parameters
+                $parameters,
+                $requestOverrides
             );
             $this->assertValid(
                 $this->generationRequestValidator->validate($request),
@@ -237,6 +242,7 @@ final class GenerationOrchestrator
                     'result_status' => $result->status(),
                     'provider_code' => $providerCode,
                     'duration_ms' => $durationMs,
+                    'correlation_id' => $options['correlation_id'] ?? null,
                 ]);
 
                 return [
@@ -302,6 +308,7 @@ final class GenerationOrchestrator
                 'model_id' => self::MODEL_ID,
                 'duration_ms' => $durationMs,
                 'preview_available' => true,
+                'correlation_id' => $options['correlation_id'] ?? null,
             ]);
 
             return [
