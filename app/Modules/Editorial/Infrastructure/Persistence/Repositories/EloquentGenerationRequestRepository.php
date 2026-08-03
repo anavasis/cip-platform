@@ -82,6 +82,7 @@ final class EloquentGenerationRequestRepository implements GenerationRequestRepo
             ->where('project_id', $projectId)
             ->where('announcement_id', $announcementId)
             ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->first();
 
         return $row ? new GenerationRequest($row->payload ?? []) : null;
@@ -94,6 +95,7 @@ final class EloquentGenerationRequestRepository implements GenerationRequestRepo
             ->where('project_id', $projectId)
             ->where('package_id', $packageId)
             ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->first();
 
         return $row ? new GenerationRequest($row->payload ?? []) : null;

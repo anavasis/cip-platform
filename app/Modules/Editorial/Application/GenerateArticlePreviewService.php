@@ -5,6 +5,7 @@ namespace App\Modules\Editorial\Application;
 use App\Application\Services\EventBusService;
 use App\Application\Services\JobEngineService;
 use App\Modules\Announcement\Infrastructure\Persistence\Models\Announcement;
+use App\Modules\Editorial\Domain\Article\ArticlePreview;
 use App\Modules\Editorial\Domain\Article\ArticlePreviewRepositoryInterface;
 use App\Modules\Editorial\Domain\Blueprint\ContentBlueprintRepositoryInterface;
 use App\Modules\Editorial\Domain\Events\ArticlePreviewCreated;
@@ -15,7 +16,10 @@ use App\Modules\Editorial\Domain\Events\GenerationRequested;
 use App\Modules\Editorial\Domain\Events\GenerationStarted;
 use App\Modules\Editorial\Domain\Events\PromptContextCreated;
 use App\Modules\Editorial\Domain\Events\PromptPackageCreated;
+use App\Modules\Editorial\Domain\GenerationRequest\GenerationRequest;
 use App\Modules\Editorial\Domain\GenerationRequest\GenerationRequestRepositoryInterface;
+use App\Modules\Editorial\Domain\GenerationRequest\GenerationRequestStatus;
+use App\Modules\Editorial\Domain\GenerationResult\GenerationResult;
 use App\Modules\Editorial\Domain\GenerationResult\GenerationResultRepositoryInterface;
 use App\Modules\Editorial\Domain\GenerationResult\GenerationResultStatus;
 use App\Modules\Editorial\Domain\PromptContext\PromptContextRepositoryInterface;
@@ -28,6 +32,22 @@ use RuntimeException;
 
 final class GenerateArticlePreviewService
 {
+    private const EXPECTED_TEMPLATE_ID = 'smce.editorial.slice_a';
+
+    private const EXPECTED_TEMPLATE_VERSION = '1.0.0';
+
+    private const EXPECTED_MODEL_ID = 'smce.stub.deterministic';
+
+    private const EXPECTED_MODEL_VERSION = '1';
+
+    private const EXPECTED_TEMPERATURE = 0.0;
+
+    private const EXPECTED_MAX_OUTPUT_TOKENS = 2048;
+
+    private const EXPECTED_RESPONSE_FORMAT = 'text';
+
+    private const EXPECTED_SEED = 1;
+
     public function __construct(
         private readonly GenerationOrchestrator $orchestrator,
         private readonly CapabilityGate $capabilityGate,
@@ -138,34 +158,15 @@ final class GenerateArticlePreviewService
         }
 
         if (! $regenerate) {
-            $existingPreview = $this->previews->findLatestForAnnouncement(
+            $reuse = $this->tryReuseEligibleGeneration(
                 $organizationId,
                 $projectId,
                 $announcementId,
+                $announcement,
+                $correlationId,
             );
-            $existingRequest = $this->requests->findLatestForAnnouncement(
-                $organizationId,
-                $projectId,
-                $announcementId,
-            );
-            if ($existingPreview !== null && $existingRequest !== null) {
-                $existingResult = $this->results->findByRequestId(
-                    $organizationId,
-                    $projectId,
-                    $existingRequest->requestId(),
-                );
-
-                return [
-                    'ok' => true,
-                    'queued' => false,
-                    'reused' => true,
-                    'correlation_id' => $correlationId,
-                    'request_id' => $existingRequest->requestId(),
-                    'request_hash' => $existingRequest->requestHash(),
-                    'result_id' => $existingResult?->resultId(),
-                    'preview_id' => $existingPreview->previewId(),
-                    'blueprint_id' => null,
-                ];
+            if ($reuse !== null) {
+                return $reuse;
             }
         }
 
@@ -233,24 +234,42 @@ final class GenerateArticlePreviewService
             ];
         }
 
-        // Idempotency: if same request_hash already exists, reuse stored result/preview
+        // Hash-level idempotency: only reuse when the stored lineage still passes eligibility.
         $request = $out['request'];
         $existing = $this->requests->findByRequestHash($organizationId, $projectId, $request->requestHash());
         if ($existing !== null && ! $regenerate) {
-            $existingResult = $this->results->findByRequestId($organizationId, $projectId, $existing->requestId());
-            $existingPreview = $this->previews->findLatestForAnnouncement($organizationId, $projectId, $announcementId);
+            $existingPreview = $this->previews->findLatestForAnnouncement(
+                $organizationId,
+                $projectId,
+                $announcementId,
+            );
+            if ($existingPreview !== null
+                && $this->isReuseEligible(
+                    $organizationId,
+                    $projectId,
+                    $announcementId,
+                    $announcement,
+                    $existingPreview,
+                    $existing,
+                )) {
+                $existingResult = $this->results->findById(
+                    $organizationId,
+                    $projectId,
+                    $existingPreview->resultId(),
+                );
 
-            return [
-                'ok' => true,
-                'queued' => false,
-                'reused' => true,
-                'correlation_id' => $correlationId,
-                'request_id' => $existing->requestId(),
-                'request_hash' => $existing->requestHash(),
-                'result_id' => $existingResult?->resultId(),
-                'preview_id' => $existingPreview?->previewId(),
-                'blueprint_id' => $out['blueprint_id'] ?? null,
-            ];
+                return [
+                    'ok' => true,
+                    'queued' => false,
+                    'reused' => true,
+                    'correlation_id' => $correlationId,
+                    'request_id' => $existing->requestId(),
+                    'request_hash' => $existing->requestHash(),
+                    'result_id' => $existingResult?->resultId(),
+                    'preview_id' => $existingPreview->previewId(),
+                    'blueprint_id' => $out['blueprint_id'] ?? null,
+                ];
+            }
         }
 
         DB::transaction(function () use ($organizationId, $projectId, $out, $actorId, $correlationId, $announcementId) {
@@ -371,5 +390,182 @@ final class GenerateArticlePreviewService
         } catch (\Throwable) {
             // best-effort persistence of error path
         }
+    }
+
+    /**
+     * Input-aware idempotent reuse: latest preview must match the latest READY request,
+     * its SUCCESS result, current announcement inputs, and stub binding constants.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function tryReuseEligibleGeneration(
+        string $organizationId,
+        string $projectId,
+        string $announcementId,
+        Announcement $announcement,
+        string $correlationId,
+    ): ?array {
+        $preview = $this->previews->findLatestForAnnouncement(
+            $organizationId,
+            $projectId,
+            $announcementId,
+        );
+        $request = $this->requests->findLatestForAnnouncement(
+            $organizationId,
+            $projectId,
+            $announcementId,
+        );
+
+        if ($preview === null || $request === null) {
+            return null;
+        }
+
+        if (! $this->isReuseEligible(
+            $organizationId,
+            $projectId,
+            $announcementId,
+            $announcement,
+            $preview,
+            $request,
+        )) {
+            return null;
+        }
+
+        $result = $this->results->findById(
+            $organizationId,
+            $projectId,
+            $preview->resultId(),
+        );
+
+        return [
+            'ok' => true,
+            'queued' => false,
+            'reused' => true,
+            'correlation_id' => $correlationId,
+            'request_id' => $request->requestId(),
+            'request_hash' => $request->requestHash(),
+            'result_id' => $result?->resultId(),
+            'preview_id' => $preview->previewId(),
+            'blueprint_id' => null,
+        ];
+    }
+
+    private function isReuseEligible(
+        string $organizationId,
+        string $projectId,
+        string $announcementId,
+        Announcement $announcement,
+        ArticlePreview $preview,
+        GenerationRequest $request,
+    ): bool {
+        if ($preview->organizationId() !== $organizationId
+            || $preview->projectId() !== $projectId
+            || $preview->announcementId() !== $announcementId) {
+            return false;
+        }
+
+        if ($request->announcementId() !== $announcementId) {
+            return false;
+        }
+
+        if ($preview->requestId() === '' || $preview->requestId() !== $request->requestId()) {
+            return false;
+        }
+
+        if ($request->status() !== GenerationRequestStatus::READY) {
+            return false;
+        }
+
+        if ($preview->resultId() === '' || $preview->title() === '' || $preview->body() === '') {
+            return false;
+        }
+
+        $result = $this->results->findById($organizationId, $projectId, $preview->resultId());
+        if ($result === null) {
+            return false;
+        }
+
+        if ($result->status() !== GenerationResultStatus::SUCCESS) {
+            return false;
+        }
+
+        if ($result->requestId() !== $request->requestId()
+            || $result->resultId() !== $preview->resultId()) {
+            return false;
+        }
+
+        $byRequest = $this->results->findByRequestId(
+            $organizationId,
+            $projectId,
+            $request->requestId(),
+        );
+        if ($byRequest === null
+            || $byRequest->resultId() !== $result->resultId()
+            || $byRequest->status() !== GenerationResultStatus::SUCCESS) {
+            return false;
+        }
+
+        if (! $this->requestBindingMatchesStubDefaults($request)) {
+            return false;
+        }
+
+        $package = $this->packages->findById($organizationId, $projectId, $request->packageId());
+        if ($package === null) {
+            return false;
+        }
+
+        $template = $package->templateReference();
+        if ($template->templateId() !== self::EXPECTED_TEMPLATE_ID
+            || $template->templateVersion() !== self::EXPECTED_TEMPLATE_VERSION) {
+            return false;
+        }
+
+        $context = $this->contexts->findById($organizationId, $projectId, $package->contextId());
+        if ($context === null) {
+            return false;
+        }
+
+        $currentHash = (string) $announcement->content_hash;
+        $currentRevision = (int) $announcement->revision_no;
+        if ($context->sourceContentHash() !== $currentHash
+            || (int) $context->announcementRevisionNo() !== $currentRevision) {
+            return false;
+        }
+
+        // Readable durable preview row still resolves for this lineage.
+        $loaded = $this->previews->findById($organizationId, $projectId, $preview->previewId());
+        if ($loaded === null
+            || $loaded->requestId() !== $request->requestId()
+            || $loaded->resultId() !== $result->resultId()
+            || $loaded->body() === '') {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function requestBindingMatchesStubDefaults(GenerationRequest $request): bool
+    {
+        $model = $request->modelReference();
+        if ($model->modelId() !== self::EXPECTED_MODEL_ID
+            || $model->modelVersion() !== self::EXPECTED_MODEL_VERSION) {
+            return false;
+        }
+
+        $parameters = $request->parameters();
+        if ((float) $parameters->temperature() !== self::EXPECTED_TEMPERATURE) {
+            return false;
+        }
+        if ((int) $parameters->maxOutputTokens() !== self::EXPECTED_MAX_OUTPUT_TOKENS) {
+            return false;
+        }
+        if ($parameters->responseFormat() !== self::EXPECTED_RESPONSE_FORMAT) {
+            return false;
+        }
+        if ((int) $parameters->seed() !== self::EXPECTED_SEED) {
+            return false;
+        }
+
+        return true;
     }
 }
