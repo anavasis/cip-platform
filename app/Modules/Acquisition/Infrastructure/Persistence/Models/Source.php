@@ -22,6 +22,7 @@ class Source extends Model
         'parser_profile',
         'enabled',
         'manual_only',
+        'acquire_interval_seconds',
         'last_acquired_at',
         'last_checked_at',
         'last_check_status',
@@ -33,6 +34,7 @@ class Source extends Model
             'allowed_domains' => 'array',
             'enabled' => 'boolean',
             'manual_only' => 'boolean',
+            'acquire_interval_seconds' => 'integer',
             'last_acquired_at' => 'datetime',
             'last_checked_at' => 'datetime',
         ];

@@ -19,6 +19,7 @@ final class EloquentSourceRepository implements SourceRepositoryInterface
         'parser_profile',
         'enabled',
         'manual_only',
+        'acquire_interval_seconds',
         'last_acquired_at',
         'last_checked_at',
         'last_check_status',

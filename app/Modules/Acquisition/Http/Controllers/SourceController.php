@@ -66,6 +66,7 @@ class SourceController extends Controller
             'allowed_domains' => $source->allowed_domains ?? [],
             'parser_profile' => $source->parser_profile,
             'manual_only' => $source->manual_only,
+            'acquire_interval_seconds' => $source->acquire_interval_seconds,
         ], $validated);
         $result = $this->registry->update(
             $organization->id,
@@ -123,6 +124,7 @@ class SourceController extends Controller
             'parser_profile' => ['sometimes', 'nullable', 'string', 'max:64'],
             'enabled' => ['sometimes', 'boolean'],
             'manual_only' => ['sometimes', 'boolean'],
+            'acquire_interval_seconds' => ['sometimes', 'integer', 'min:1', 'max:31536000'],
         ];
     }
 

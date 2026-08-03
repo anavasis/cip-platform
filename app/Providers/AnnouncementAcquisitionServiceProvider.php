@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Application\Services\FeatureFlagService;
 use App\Modules\Acquisition\Application\AcquisitionDiagnostics;
 use App\Modules\Acquisition\Application\AcquisitionEngine;
 use App\Modules\Acquisition\Application\AcquisitionManager;
@@ -93,8 +94,11 @@ class AnnouncementAcquisitionServiceProvider extends ServiceProvider
         $this->app->alias(EloquentAnnouncementRepository::class, AnnouncementRepositoryInterface::class);
         $this->app->singleton(EloquentAcquisitionRunRepository::class);
 
-        // Feature flags can be layered on later; module capabilities default on for this runtime.
-        $this->app->singleton(CapabilityGate::class, static fn (): CapabilityGate => new CapabilityGate);
+        // Fail-closed: missing/unset FeatureFlag rows keep acquisition disabled.
+        $this->app->singleton(
+            CapabilityGate::class,
+            static fn ($app): CapabilityGate => new CapabilityGate($app->make(FeatureFlagService::class)),
+        );
         $this->app->alias(CapabilityGate::class, AcquisitionCapabilityGateInterface::class);
         $this->app->alias(CapabilityGate::class, AnnouncementCapabilityGateInterface::class);
 

@@ -2,9 +2,12 @@
 
 namespace Tests\Feature\Modules\Acquisition;
 
+use App\Application\Services\FeatureFlagService;
 use App\Application\Services\JobEngineService;
+use App\Domain\Shared\Enums\FeatureFlagScope;
 use App\Domain\Shared\Enums\PlatformJobStatus;
 use App\Infrastructure\Persistence\Models\Project;
+use App\Modules\Acquisition\Application\CapabilityGate;
 use App\Modules\Acquisition\Infrastructure\Jobs\AcquireSourceJob;
 use App\Modules\Acquisition\Infrastructure\Jobs\IngestSourceJob;
 use App\Modules\Acquisition\Infrastructure\Persistence\Models\Source;
@@ -25,6 +28,7 @@ class AcquisitionJobTest extends TestCase
             'slug' => 'jobs-project',
             'created_by' => $owner->id,
         ]);
+        $this->enableAcquisition($organization->id, $project->id);
         $source = $this->createSource($organization->id, $project->id);
         $engine = app(JobEngineService::class);
         $payload = [
@@ -94,6 +98,22 @@ class AcquisitionJobTest extends TestCase
             'enabled' => true,
             'manual_only' => false,
         ]);
+    }
+
+    private function enableAcquisition(string $organizationId, string $projectId): void
+    {
+        $flags = app(FeatureFlagService::class);
+
+        foreach ([CapabilityGate::ACQUISITION, CapabilityGate::SOURCE_REGISTRY] as $key) {
+            $flags->upsert(
+                $key,
+                true,
+                FeatureFlagScope::Project,
+                null,
+                $organizationId,
+                $projectId,
+            );
+        }
     }
 
     private function rssBody(): string

@@ -53,11 +53,13 @@ final class EditorialIngestionService
             return $this->reject('tenant_context_missing', $id);
         }
 
-        if (! $this->capabilityGate->isEnabled(CapabilityGateInterface::ACQUISITION)) {
+        $tenantGate = $this->tenantGate();
+
+        if (! $tenantGate->isEnabled(CapabilityGateInterface::ACQUISITION)) {
             return $this->reject('capability_disabled', $id);
         }
 
-        if (! $this->startupReady()) {
+        if (! $this->startupReady($tenantGate)) {
             return $this->reject('startup_validation_failed', $id);
         }
 
@@ -129,7 +131,16 @@ final class EditorialIngestionService
         ];
     }
 
-    private function startupReady(): bool
+    private function tenantGate(): CapabilityGateInterface
+    {
+        if ($this->capabilityGate instanceof \App\Modules\Acquisition\Application\CapabilityGate) {
+            return $this->capabilityGate->forTenant($this->organizationId, $this->projectId);
+        }
+
+        return $this->capabilityGate;
+    }
+
+    private function startupReady(CapabilityGateInterface $tenantGate): bool
     {
         if (! $this->collectorRegistry->has('safe_feed')) {
             return false;
@@ -139,7 +150,7 @@ final class EditorialIngestionService
             return false;
         }
 
-        if (! $this->capabilityGate->isEnabled(CapabilityGateInterface::SOURCE_REGISTRY)) {
+        if (! $tenantGate->isEnabled(CapabilityGateInterface::SOURCE_REGISTRY)) {
             return false;
         }
 

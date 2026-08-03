@@ -87,6 +87,12 @@ final readonly class SourceRegistryService
             return ['success' => false, 'error' => 'validation'];
         }
 
+        $intervalResult = $this->validateAcquireInterval($input['acquire_interval_seconds'] ?? 3600);
+
+        if ($intervalResult['error'] !== '') {
+            return ['success' => false, 'error' => $intervalResult['error']];
+        }
+
         $utcNow = gmdate('Y-m-d H:i:s');
         $insertId = $this->repository->insert([
             'organization_id' => $organizationId,
@@ -101,6 +107,7 @@ final readonly class SourceRegistryService
             'parser_profile' => $parserResult['value'],
             'enabled' => $this->booleanValue($input['enabled'] ?? false),
             'manual_only' => $this->booleanValue($input['manual_only'] ?? true),
+            'acquire_interval_seconds' => $intervalResult['value'],
             'created_at_utc' => $utcNow,
             'updated_at_utc' => $utcNow,
         ]);
@@ -201,6 +208,14 @@ final readonly class SourceRegistryService
             return ['success' => false, 'error' => 'validation'];
         }
 
+        $intervalResult = $this->validateAcquireInterval(
+            $input['acquire_interval_seconds'] ?? ($existing['acquire_interval_seconds'] ?? 3600),
+        );
+
+        if ($intervalResult['error'] !== '') {
+            return ['success' => false, 'error' => $intervalResult['error']];
+        }
+
         $updates = [
             'organization_id' => $organizationId,
             'project_id' => $projectId,
@@ -212,6 +227,7 @@ final readonly class SourceRegistryService
             'allowed_domains' => $domainsResult['value'],
             'parser_profile' => $parserResult['value'],
             'manual_only' => $this->booleanValue($input['manual_only'] ?? ($existing['manual_only'] ?? true)),
+            'acquire_interval_seconds' => $intervalResult['value'],
             'updated_at_utc' => gmdate('Y-m-d H:i:s'),
         ];
 
@@ -373,6 +389,21 @@ final readonly class SourceRegistryService
         return strlen($profile) > 64
             ? ['value' => '', 'error' => 'validation']
             : ['value' => $profile, 'error' => ''];
+    }
+
+    /** @return array{value: int, error: string} */
+    private function validateAcquireInterval(mixed $rawInterval): array
+    {
+        $interval = filter_var($rawInterval, FILTER_VALIDATE_INT, [
+            'options' => [
+                'min_range' => 1,
+                'max_range' => 31536000,
+            ],
+        ]);
+
+        return $interval === false
+            ? ['value' => 0, 'error' => 'invalid_acquire_interval']
+            : ['value' => $interval, 'error' => ''];
     }
 
     /** @return array{value: mixed, error: string} */

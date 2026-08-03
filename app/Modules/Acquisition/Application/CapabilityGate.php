@@ -6,6 +6,11 @@ use App\Application\Services\FeatureFlagService;
 use App\Modules\Acquisition\Domain\Contracts\CapabilityGateInterface as AcquisitionCapabilityGateInterface;
 use App\Modules\Announcement\Domain\Contracts\CapabilityGateInterface as AnnouncementCapabilityGateInterface;
 
+/**
+ * Fail-closed capability gate backed by Kernel FeatureFlagService.
+ *
+ * Missing/unset flags evaluate to false. No global fail-open defaults.
+ */
 final class CapabilityGate implements AcquisitionCapabilityGateInterface, AnnouncementCapabilityGateInterface
 {
     public const ACQUISITION = 'acquisition';
@@ -21,17 +26,38 @@ final class CapabilityGate implements AcquisitionCapabilityGateInterface, Announ
         private readonly ?string $projectId = null,
     ) {}
 
+    public function forTenant(string $organizationId, string $projectId): self
+    {
+        $gate = new self($this->featureFlags, trim($organizationId), trim($projectId));
+        $gate->overrides = $this->overrides;
+
+        return $gate;
+    }
+
     public function isEnabled(string $key): bool
     {
         if (array_key_exists($key, $this->overrides)) {
             return $this->overrides[$key];
         }
 
-        if ($this->featureFlags !== null) {
-            return $this->featureFlags->isEnabled($key, $this->organizationId, $this->projectId);
+        if ($this->featureFlags === null) {
+            return false;
         }
 
-        return in_array($key, [self::ACQUISITION, self::SOURCE_REGISTRY], true);
+        $organizationId = $this->organizationId !== null && $this->organizationId !== ''
+            ? $this->organizationId
+            : null;
+        $projectId = $this->projectId !== null && $this->projectId !== ''
+            ? $this->projectId
+            : null;
+
+        // FeatureFlagService already fails closed when no flag row exists.
+        return $this->featureFlags->isEnabled($key, $organizationId, $projectId);
+    }
+
+    public function isEnabledFor(string $key, string $organizationId, string $projectId): bool
+    {
+        return $this->forTenant($organizationId, $projectId)->isEnabled($key);
     }
 
     public function setEnabled(string $key, bool $enabled): void

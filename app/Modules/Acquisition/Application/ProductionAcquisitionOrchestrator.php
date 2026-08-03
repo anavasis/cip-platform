@@ -35,11 +35,13 @@ final readonly class ProductionAcquisitionOrchestrator
             return $this->rejectRun('invalid_request', 0, $startedAt);
         }
 
-        if (! $this->capabilityGate->isEnabled(CapabilityGate::ACQUISITION)) {
+        $tenantGate = $this->tenantGate($organizationId, $projectId);
+
+        if (! $tenantGate->isEnabled(CapabilityGate::ACQUISITION)) {
             return $this->rejectRun('capability_disabled', count($normalizedIds), $startedAt);
         }
 
-        if (! $this->startupReady()) {
+        if (! $this->startupReady($tenantGate)) {
             return $this->rejectRun('startup_validation_failed', count($normalizedIds), $startedAt);
         }
 
@@ -101,11 +103,20 @@ final readonly class ProductionAcquisitionOrchestrator
         return $runResult;
     }
 
-    private function startupReady(): bool
+    private function tenantGate(string $organizationId, string $projectId): CapabilityGateInterface
+    {
+        if ($this->capabilityGate instanceof CapabilityGate) {
+            return $this->capabilityGate->forTenant($organizationId, $projectId);
+        }
+
+        return $this->capabilityGate;
+    }
+
+    private function startupReady(CapabilityGateInterface $tenantGate): bool
     {
         if (! $this->collectorRegistry->has('safe_feed')
             || count($this->parserRegistry->all()) < 1
-            || ! $this->capabilityGate->isEnabled(CapabilityGate::SOURCE_REGISTRY)) {
+            || ! $tenantGate->isEnabled(CapabilityGate::SOURCE_REGISTRY)) {
             return false;
         }
 

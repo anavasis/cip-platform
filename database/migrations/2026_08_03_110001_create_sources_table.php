@@ -20,8 +20,9 @@ return new class extends Migration
             $table->string('feed_url_hash', 64);
             $table->json('allowed_domains');
             $table->string('parser_profile')->nullable();
-            $table->boolean('enabled')->default(true);
-            $table->boolean('manual_only')->default(false);
+            $table->boolean('enabled')->default(false);
+            $table->boolean('manual_only')->default(true);
+            $table->unsignedInteger('acquire_interval_seconds')->default(3600);
             $table->timestampTz('last_acquired_at')->nullable();
             $table->timestampTz('last_checked_at')->nullable();
             $table->string('last_check_status')->nullable();

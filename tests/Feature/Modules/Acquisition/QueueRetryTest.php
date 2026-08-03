@@ -2,9 +2,12 @@
 
 namespace Tests\Feature\Modules\Acquisition;
 
+use App\Application\Services\FeatureFlagService;
 use App\Application\Services\JobEngineService;
+use App\Domain\Shared\Enums\FeatureFlagScope;
 use App\Domain\Shared\Enums\PlatformJobStatus;
 use App\Infrastructure\Persistence\Models\Project;
+use App\Modules\Acquisition\Application\CapabilityGate;
 use App\Modules\Acquisition\Infrastructure\Jobs\AcquireSourceJob;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -20,6 +23,19 @@ class QueueRetryTest extends TestCase
             'slug' => 'retry-project',
             'created_by' => $owner->id,
         ]);
+        $flags = app(FeatureFlagService::class);
+
+        foreach ([CapabilityGate::ACQUISITION, CapabilityGate::SOURCE_REGISTRY] as $key) {
+            $flags->upsert(
+                $key,
+                true,
+                FeatureFlagScope::Project,
+                null,
+                $organization->id,
+                $project->id,
+            );
+        }
+
         $missingSourceId = (string) Str::uuid();
         $job = app(JobEngineService::class)->create(
             'acquisition.acquire_source',
