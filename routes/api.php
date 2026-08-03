@@ -25,6 +25,9 @@ use App\Modules\Acquisition\Http\Controllers\SourceConnectivityController;
 use App\Modules\Acquisition\Http\Controllers\SourceController;
 use App\Modules\Announcement\Http\Controllers\AnnouncementController;
 use App\Modules\Announcement\Http\Controllers\IngestionController;
+use App\Modules\Editorial\Http\Controllers\EditorialArtifactController;
+use App\Modules\Editorial\Http\Controllers\EditorialDiagnosticsController;
+use App\Modules\Editorial\Http\Controllers\EditorialGenerationController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')
@@ -208,6 +211,29 @@ Route::prefix('v1')
                                 ->middleware(EnforcePermission::class.':acquisition.view');
                             Route::get('acquisition/diagnostics', [AcquisitionDiagnosticsController::class, 'show'])
                                 ->middleware(EnforcePermission::class.':acquisition.diagnostics');
+
+                            Route::post('editorial/announcements/{announcement}/generate', [EditorialGenerationController::class, 'generate'])
+                                ->middleware(EnforcePermission::class.':editorial.generate');
+                            Route::post('editorial/announcements/{announcement}/regenerate', [EditorialGenerationController::class, 'regenerate'])
+                                ->middleware(EnforcePermission::class.':editorial.regenerate');
+                            Route::get('editorial/announcements/{announcement}/generation', [EditorialGenerationController::class, 'showGeneration'])
+                                ->middleware(EnforcePermission::class.':editorial.view');
+                            Route::get('editorial/generations', [EditorialGenerationController::class, 'indexGenerations'])
+                                ->middleware(EnforcePermission::class.':editorial.view');
+                            Route::get('editorial/blueprints/{blueprint}', [EditorialArtifactController::class, 'showBlueprint'])
+                                ->middleware(EnforcePermission::class.':editorial.view');
+                            Route::get('editorial/prompt-contexts/{promptContext}', [EditorialArtifactController::class, 'showPromptContext'])
+                                ->middleware(EnforcePermission::class.':editorial.view');
+                            Route::get('editorial/prompt-packages/{promptPackage}', [EditorialArtifactController::class, 'showPromptPackage'])
+                                ->middleware(EnforcePermission::class.':editorial.view');
+                            Route::get('editorial/generation-requests/{generationRequest}', [EditorialArtifactController::class, 'showGenerationRequest'])
+                                ->middleware(EnforcePermission::class.':editorial.view');
+                            Route::get('editorial/generation-results/{generationResult}', [EditorialArtifactController::class, 'showGenerationResult'])
+                                ->middleware(EnforcePermission::class.':editorial.view');
+                            Route::get('editorial/announcements/{announcement}/preview', [EditorialArtifactController::class, 'showPreview'])
+                                ->middleware(EnforcePermission::class.':editorial.view');
+                            Route::get('editorial/diagnostics', [EditorialDiagnosticsController::class, 'show'])
+                                ->middleware(EnforcePermission::class.':editorial.diagnostics');
                         });
                 });
         });
