@@ -19,8 +19,11 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: mbstring, pdo_sqlite, pdo_pgsql, redis, bcmath
+          extensions: mbstring, curl, pdo_sqlite, pdo_pgsql, redis, bcmath
           coverage: none
+
+      - name: Verify cURL extension
+        run: php -m | grep -i '^curl$'
 
       - name: Validate Composer files
         run: composer validate --strict
@@ -29,4 +32,57 @@ jobs:
         run: composer install --no-interaction --prefer-dist
 
       - name: Run tests
+        run: php artisan test
+
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: cip_testing
+          POSTGRES_USER: cip
+          POSTGRES_PASSWORD: cip
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cip -d cip_testing"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      APP_ENV: testing
+      APP_KEY: base64:dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleXRlc3Q=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: cip_testing
+      DB_USERNAME: cip
+      DB_PASSWORD: cip
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, curl, pdo_pgsql, redis, bcmath, pcntl
+          coverage: none
+
+      - name: Verify cURL extension
+        run: php -m | grep -i '^curl$'
+
+      - name: Validate Composer files
+        run: composer validate --strict
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Run PostgreSQL migrations
+        run: php artisan migrate --force
+
+      - name: Run PostgreSQL tests
         run: php artisan test

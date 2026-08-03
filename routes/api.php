@@ -15,10 +15,16 @@ use App\Http\Controllers\Api\V1\ProjectController;
 use App\Http\Controllers\Api\V1\ProjectMembershipController;
 use App\Http\Controllers\Api\V1\ScheduleController;
 use App\Http\Controllers\Api\V1\SecretController;
+use App\Http\Middleware\EnforcePermission;
 use App\Http\Middleware\EnsureOrganizationAccess;
 use App\Http\Middleware\EnsureProjectAccess;
-use App\Http\Middleware\EnforcePermission;
 use App\Http\Middleware\ForceJsonResponse;
+use App\Modules\Acquisition\Http\Controllers\AcquisitionDiagnosticsController;
+use App\Modules\Acquisition\Http\Controllers\AcquisitionRunController;
+use App\Modules\Acquisition\Http\Controllers\SourceConnectivityController;
+use App\Modules\Acquisition\Http\Controllers\SourceController;
+use App\Modules\Announcement\Http\Controllers\AnnouncementController;
+use App\Modules\Announcement\Http\Controllers\IngestionController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')
@@ -163,6 +169,45 @@ Route::prefix('v1')
 
                             Route::post('jobs/ping', [JobController::class, 'dispatchPing'])
                                 ->middleware(EnforcePermission::class.':jobs.view');
+
+                            Route::get('sources', [SourceController::class, 'index'])
+                                ->middleware(EnforcePermission::class.':sources.view');
+                            Route::post('sources', [SourceController::class, 'store'])
+                                ->middleware(EnforcePermission::class.':sources.manage');
+                            Route::get('sources/{source}', [SourceController::class, 'show'])
+                                ->middleware(EnforcePermission::class.':sources.view');
+                            Route::put('sources/{source}', [SourceController::class, 'update'])
+                                ->middleware(EnforcePermission::class.':sources.manage');
+                            Route::patch('sources/{source}', [SourceController::class, 'update'])
+                                ->middleware(EnforcePermission::class.':sources.manage');
+                            Route::delete('sources/{source}', [SourceController::class, 'destroy'])
+                                ->middleware(EnforcePermission::class.':sources.manage');
+                            Route::post('sources/{source}/enable', [SourceController::class, 'enable'])
+                                ->middleware(EnforcePermission::class.':sources.manage');
+                            Route::post('sources/{source}/disable', [SourceController::class, 'disable'])
+                                ->middleware(EnforcePermission::class.':sources.manage');
+                            Route::post('sources/{source}/run', [AcquisitionRunController::class, 'store'])
+                                ->middleware(EnforcePermission::class.':sources.run');
+                            Route::post('sources/{source}/check', [SourceConnectivityController::class, 'store'])
+                                ->middleware(EnforcePermission::class.':sources.run');
+                            Route::post('sources/{source}/ingest', [IngestionController::class, 'store'])
+                                ->middleware(EnforcePermission::class.':acquisition.run');
+
+                            Route::get('announcements', [AnnouncementController::class, 'index'])
+                                ->middleware(EnforcePermission::class.':announcements.view');
+                            Route::get('announcements/summary', [AnnouncementController::class, 'summary'])
+                                ->middleware(EnforcePermission::class.':announcements.view');
+                            Route::get('announcements/{announcement}', [AnnouncementController::class, 'show'])
+                                ->middleware(EnforcePermission::class.':announcements.view');
+
+                            Route::get('acquisition/runs', [AcquisitionRunController::class, 'index'])
+                                ->middleware(EnforcePermission::class.':acquisition.view');
+                            Route::post('acquisition/runs', [AcquisitionRunController::class, 'store'])
+                                ->middleware(EnforcePermission::class.':acquisition.run');
+                            Route::get('acquisition/runs/{acquisitionRun}', [AcquisitionRunController::class, 'show'])
+                                ->middleware(EnforcePermission::class.':acquisition.view');
+                            Route::get('acquisition/diagnostics', [AcquisitionDiagnosticsController::class, 'show'])
+                                ->middleware(EnforcePermission::class.':acquisition.diagnostics');
                         });
                 });
         });

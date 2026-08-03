@@ -25,6 +25,13 @@ class PermissionSeeder extends Seeder
             'connectors.manage' => 'Manage connectors',
             'jobs.view' => 'View and dispatch jobs',
             'diagnostics.view' => 'View diagnostics and metrics',
+            'sources.view' => 'View acquisition sources',
+            'sources.manage' => 'Create and manage acquisition sources',
+            'sources.run' => 'Run and check acquisition sources',
+            'announcements.view' => 'View announcements',
+            'acquisition.view' => 'View acquisition runs',
+            'acquisition.run' => 'Run acquisition and ingestion jobs',
+            'acquisition.diagnostics' => 'View acquisition diagnostics',
         ];
 
         foreach ($permissions as $name => $description) {
@@ -42,10 +49,14 @@ class PermissionSeeder extends Seeder
                 'flags.manage', 'audit.view',
                 'connectors.view', 'connectors.manage',
                 'jobs.view', 'diagnostics.view',
+                'sources.view', 'sources.manage', 'sources.run',
+                'announcements.view',
+                'acquisition.view', 'acquisition.run', 'acquisition.diagnostics',
             ],
             'member' => [
                 'organizations.view', 'projects.view',
                 'audit.view', 'connectors.view', 'jobs.view',
+                'sources.view', 'announcements.view', 'acquisition.view',
             ],
         ];
 
@@ -65,13 +76,20 @@ class PermissionSeeder extends Seeder
                 'config.manage', 'secrets.manage', 'secrets.reveal',
                 'flags.manage', 'connectors.view', 'connectors.manage',
                 'jobs.view',
+                'sources.view', 'sources.manage', 'sources.run',
+                'announcements.view',
+                'acquisition.view', 'acquisition.run', 'acquisition.diagnostics',
             ],
             'editor' => [
                 'projects.view', 'config.manage',
                 'connectors.view', 'jobs.view',
+                'sources.view', 'sources.manage', 'sources.run',
+                'announcements.view',
+                'acquisition.view', 'acquisition.run',
             ],
             'viewer' => [
                 'projects.view', 'connectors.view', 'jobs.view',
+                'sources.view', 'announcements.view', 'acquisition.view',
             ],
         ];
 
