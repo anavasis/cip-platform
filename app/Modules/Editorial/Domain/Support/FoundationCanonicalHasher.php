@@ -5,7 +5,7 @@ namespace App\Modules\Editorial\Domain\Support;
 /**
  * Foundation-compatible canonical JSON hashing (json_encode path).
  *
- * Matches editorial-foundation builders/validators when wp_json_encode is absent.
+ * Matches editorial-foundation builders/validators when the WordPress JSON helper is absent.
  */
 final class FoundationCanonicalHasher
 {
