@@ -33,6 +33,10 @@ return new class extends Migration
             $table->unique(['project_id', 'slug']);
             $table->unique(['project_id', 'feed_url_hash']);
             $table->index(['organization_id', 'project_id', 'enabled']);
+            $table->index(
+                ['project_id', 'enabled', 'manual_only', 'last_acquired_at'],
+                'sources_due_lookup_index',
+            );
         });
     }
 

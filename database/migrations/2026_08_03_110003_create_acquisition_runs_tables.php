@@ -21,6 +21,17 @@ return new class extends Migration
             $table->float('duration_ms')->nullable();
             $table->json('meta')->nullable();
             $table->timestamps();
+
+            $table->foreign('organization_id')
+                ->references('id')
+                ->on('organizations')
+                ->cascadeOnDelete();
+            $table->foreign('project_id')
+                ->references('id')
+                ->on('projects')
+                ->cascadeOnDelete();
+            $table->index(['organization_id', 'project_id', 'status']);
+            $table->index(['project_id', 'created_at']);
         });
 
         Schema::create('acquisition_run_items', function (Blueprint $table) {
@@ -38,6 +49,13 @@ return new class extends Migration
                 ->references('id')
                 ->on('acquisition_runs')
                 ->cascadeOnDelete();
+            $table->foreign('source_id')
+                ->references('id')
+                ->on('sources')
+                ->nullOnDelete();
+            $table->index('acquisition_run_id');
+            $table->index(['organization_id', 'project_id']);
+            $table->index(['source_id', 'created_at']);
         });
     }
 
