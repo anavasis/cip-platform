@@ -19,6 +19,7 @@ use App\Modules\Editorial\Domain\Events\PromptPackageCreated;
 use App\Modules\Editorial\Domain\GenerationRequest\GenerationRequest;
 use App\Modules\Editorial\Domain\GenerationRequest\GenerationRequestRepositoryInterface;
 use App\Modules\Editorial\Domain\GenerationRequest\GenerationRequestStatus;
+use App\Modules\Editorial\Domain\GenerationResult\EditorialErrorCodes;
 use App\Modules\Editorial\Domain\GenerationResult\GenerationResult;
 use App\Modules\Editorial\Domain\GenerationResult\GenerationResultRepositoryInterface;
 use App\Modules\Editorial\Domain\GenerationResult\GenerationResultStatus;
@@ -209,7 +210,11 @@ final class GenerateArticlePreviewService
             $this->persistPartial($organizationId, $projectId, $out);
             $requestId = isset($out['request']) ? $out['request']->requestId() : ($out['request_id'] ?? null);
             $resultId = isset($out['result']) ? $out['result']->resultId() : ($out['result_id'] ?? null);
-            $errorCode = isset($out['result']) ? $out['result']->errorCode() : (string) ($out['error'] ?? 'generation_failed');
+            $errorCode = EditorialErrorCodes::fromMessage(
+                isset($out['result'])
+                    ? $out['result']->errorCode()
+                    : (string) ($out['error_code'] ?? $out['error'] ?? EditorialErrorCodes::PROVIDER_ERROR)
+            );
 
             $this->events->dispatch(new GenerationFailed(
                 organizationId: $organizationId,
@@ -225,12 +230,13 @@ final class GenerateArticlePreviewService
             return [
                 'ok' => false,
                 'queued' => false,
-                'error' => (string) ($out['error'] ?? 'generation_failed'),
+                'error' => $errorCode,
                 'error_code' => $errorCode,
                 'correlation_id' => $correlationId,
                 'request_id' => $requestId,
                 'result_id' => $resultId,
                 'stages' => $out['stages'] ?? [],
+                'failure_event_emitted' => true,
             ];
         }
 

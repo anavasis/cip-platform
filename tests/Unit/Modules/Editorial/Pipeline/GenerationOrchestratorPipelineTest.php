@@ -169,7 +169,9 @@ class GenerationOrchestratorPipelineTest extends TestCase
         $out = $orchestrator->generateFromAnnouncement($this->announcementItem());
         $this->assertFalse($out['ok']);
         $this->assertFalse($out['stages']['preview_stored']);
-        $this->assertSame('provider_content_text_required', $out['error']);
+        $this->assertSame('provider_content_text_required', $out['error_code']);
+        $this->assertSame('provider_content_text_required', $out['result']->errorCode());
+        $this->assertSame(GenerationResultStatus::ERROR, $out['result']->status());
     }
 
     public function test_orchestrator_depends_on_interface_not_stub(): void

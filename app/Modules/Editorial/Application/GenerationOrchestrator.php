@@ -10,9 +10,13 @@ use App\Modules\Editorial\Domain\Contracts\GenerationDiagnosticsSink;
 use App\Modules\Editorial\Domain\Generation\AiProviderInterface;
 use App\Modules\Editorial\Domain\GenerationRequest\GenerationModelReference;
 use App\Modules\Editorial\Domain\GenerationRequest\GenerationParameters;
+use App\Modules\Editorial\Domain\GenerationRequest\GenerationRequest;
 use App\Modules\Editorial\Domain\GenerationRequest\GenerationRequestBuilder;
 use App\Modules\Editorial\Domain\GenerationRequest\GenerationRequestValidator;
+use App\Modules\Editorial\Domain\GenerationResult\EditorialErrorCodes;
+use App\Modules\Editorial\Domain\GenerationResult\EditorialGenerationException;
 use App\Modules\Editorial\Domain\GenerationResult\GeneratedArtifactReference;
+use App\Modules\Editorial\Domain\GenerationResult\GenerationResult;
 use App\Modules\Editorial\Domain\GenerationResult\GenerationResultBuilder;
 use App\Modules\Editorial\Domain\GenerationResult\GenerationResultStatus;
 use App\Modules\Editorial\Domain\GenerationResult\GenerationResultValidator;
@@ -153,9 +157,42 @@ final class GenerationOrchestrator
             );
             $stages['build_004'] = true;
 
-            $providerOut = $this->aiProvider->generate($request);
+            try {
+                $providerOut = $this->aiProvider->generate($request);
+            } catch (\Throwable $providerEx) {
+                return $this->terminalProviderFailure(
+                    $organizationId,
+                    $projectId,
+                    $announcementId,
+                    $stages,
+                    $blueprint,
+                    $context,
+                    $package,
+                    $request,
+                    EditorialErrorCodes::PROVIDER_EXCEPTION,
+                    'Provider execution failed.',
+                    $options,
+                    0,
+                    'unknown'
+                );
+            }
+
             if (! is_array($providerOut)) {
-                throw new \InvalidArgumentException('provider_response_invalid');
+                return $this->terminalProviderFailure(
+                    $organizationId,
+                    $projectId,
+                    $announcementId,
+                    $stages,
+                    $blueprint,
+                    $context,
+                    $package,
+                    $request,
+                    EditorialErrorCodes::PROVIDER_PAYLOAD_INVALID,
+                    'Provider payload invalid.',
+                    $options,
+                    0,
+                    'unknown'
+                );
             }
             $stages['provider'] = true;
 
@@ -179,90 +216,125 @@ final class GenerationOrchestrator
             $providerOk = isset($providerOut['ok']) && $providerOut['ok'] === true;
             $durationMs = isset($providerOut['duration_ms']) ? (int) $providerOut['duration_ms'] : 0;
 
-            if ($providerOk) {
-                $artifact = [
-                    'artifact_id' => isset($providerOut['artifact_id'])
-                        ? (string) $providerOut['artifact_id']
-                        : '',
-                    'artifact_kind' => isset($providerOut['artifact_kind'])
-                        ? (string) $providerOut['artifact_kind']
-                        : GeneratedArtifactReference::KIND_CONTENT_CANDIDATE,
-                    'content_hash' => isset($providerOut['content_hash'])
-                        ? (string) $providerOut['content_hash']
-                        : '',
-                    'mime_type' => isset($providerOut['mime_type'])
-                        ? (string) $providerOut['mime_type']
-                        : 'text/plain',
-                ];
+            try {
+                if ($providerOk) {
+                    $artifact = [
+                        'artifact_id' => isset($providerOut['artifact_id'])
+                            ? (string) $providerOut['artifact_id']
+                            : '',
+                        'artifact_kind' => isset($providerOut['artifact_kind'])
+                            ? (string) $providerOut['artifact_kind']
+                            : GeneratedArtifactReference::KIND_CONTENT_CANDIDATE,
+                        'content_hash' => isset($providerOut['content_hash'])
+                            ? (string) $providerOut['content_hash']
+                            : '',
+                        'mime_type' => isset($providerOut['mime_type'])
+                            ? (string) $providerOut['mime_type']
+                            : 'text/plain',
+                    ];
 
-                $result = $this->generationResultBuilder->buildSuccessFromRequest(
-                    $request,
-                    $execution,
-                    [$artifact],
-                    ['duration_ms' => $durationMs]
-                );
-            } else {
-                $errorCode = isset($providerOut['error_code'])
-                    ? trim((string) $providerOut['error_code'])
-                    : '';
-                if ($errorCode === '') {
-                    $errorCode = 'provider_error';
+                    $result = $this->generationResultBuilder->buildSuccessFromRequest(
+                        $request,
+                        $execution,
+                        [$artifact],
+                        ['duration_ms' => $durationMs]
+                    );
+                } else {
+                    $errorCode = isset($providerOut['error_code'])
+                        ? trim((string) $providerOut['error_code'])
+                        : '';
+                    if ($errorCode === '') {
+                        $errorCode = EditorialErrorCodes::PROVIDER_ERROR;
+                    }
+                    $errorMessage = isset($providerOut['error_message'])
+                        ? trim((string) $providerOut['error_message'])
+                        : 'Provider reported failure.';
+                    // Stub/logical provider failures are permanent domain errors.
+                    if (! EditorialErrorCodes::isPermanent($errorCode) && ! EditorialErrorCodes::isRetryable($errorCode)) {
+                        $errorCode = EditorialErrorCodes::PROVIDER_ERROR;
+                    }
+
+                    $result = $this->generationResultBuilder->buildErrorFromRequest(
+                        $request,
+                        $execution,
+                        $errorCode,
+                        $this->safeErrorMessage($errorMessage),
+                        ['duration_ms' => $durationMs]
+                    );
                 }
-                $errorMessage = isset($providerOut['error_message'])
-                    ? trim((string) $providerOut['error_message'])
-                    : 'Provider reported failure.';
 
-                $result = $this->generationResultBuilder->buildErrorFromRequest(
+                $this->assertValid(
+                    $this->generationResultValidator->validate($result),
+                    EditorialErrorCodes::GENERATION_RESULT_INVALID
+                );
+                $stages['build_005'] = true;
+            } catch (\Throwable $resultEx) {
+                return $this->terminalProviderFailure(
+                    $organizationId,
+                    $projectId,
+                    $announcementId,
+                    $stages,
+                    $blueprint,
+                    $context,
+                    $package,
                     $request,
-                    $execution,
-                    $errorCode,
-                    $errorMessage,
-                    ['duration_ms' => $durationMs]
+                    EditorialErrorCodes::fromMessage($resultEx->getMessage()) === EditorialErrorCodes::EDITORIAL_JOB_FAILED
+                        ? EditorialErrorCodes::GENERATION_RESULT_INVALID
+                        : EditorialErrorCodes::fromMessage($resultEx->getMessage()),
+                    'Generation result invalid.',
+                    $options,
+                    $durationMs,
+                    $providerCode,
+                    $execution
                 );
             }
-
-            $this->assertValid(
-                $this->generationResultValidator->validate($result),
-                'generation_result_invalid'
-            );
-            $stages['build_005'] = true;
 
             if ($result->status() !== GenerationResultStatus::SUCCESS) {
-                $this->diagnostics->recordLastGeneration([
-                    'at' => $now,
-                    'ok' => false,
-                    'organization_id' => $organizationId,
-                    'project_id' => $projectId,
-                    'announcement_id' => $announcementId,
-                    'error' => $result->errorMessage() !== ''
-                        ? $result->errorMessage()
-                        : $result->errorCode(),
-                    'stages' => $stages,
-                    'request_id' => $result->requestId(),
-                    'result_id' => $result->resultId(),
-                    'result_status' => $result->status(),
-                    'provider_code' => $providerCode,
-                    'duration_ms' => $durationMs,
-                    'correlation_id' => $options['correlation_id'] ?? null,
-                ]);
-
-                return [
-                    'ok' => false,
-                    'error' => $result->errorMessage() !== ''
-                        ? $result->errorMessage()
-                        : 'Generation failed.',
-                    'stages' => $stages,
-                    'request_id' => $result->requestId(),
-                    'result_id' => $result->resultId(),
-                    'result' => $result,
-                    'blueprint' => $blueprint,
-                    'context' => $context,
-                    'package' => $package,
-                    'request' => $request,
-                ];
+                return $this->failurePayload(
+                    $organizationId,
+                    $projectId,
+                    $announcementId,
+                    $stages,
+                    $blueprint,
+                    $context,
+                    $package,
+                    $request,
+                    $result,
+                    $providerCode,
+                    $durationMs,
+                    $options,
+                    $now,
+                );
             }
 
-            $contentText = $this->providerNeutralContentText($providerOut);
+            if (! isset($providerOut['content_text']) || ! is_scalar($providerOut['content_text'])) {
+                $errorResult = $this->generationResultBuilder->buildErrorFromRequest(
+                    $request,
+                    $execution,
+                    EditorialErrorCodes::PROVIDER_CONTENT_TEXT_REQUIRED,
+                    'Provider content_text required.',
+                    ['duration_ms' => $durationMs]
+                );
+                $stages['build_005'] = true;
+
+                return $this->failurePayload(
+                    $organizationId,
+                    $projectId,
+                    $announcementId,
+                    $stages,
+                    $blueprint,
+                    $context,
+                    $package,
+                    $request,
+                    $errorResult,
+                    $providerCode,
+                    $durationMs,
+                    $options,
+                    $now,
+                );
+            }
+
+            $contentText = (string) $providerOut['content_text'];
             $title = isset($snapshot['raw_title']) && $snapshot['raw_title'] !== ''
                 ? (string) $snapshot['raw_title']
                 : 'Untitled';
@@ -271,22 +343,51 @@ final class GenerationOrchestrator
                 ? $announcementId
                 : (string) $snapshot['announcement_id'];
 
-            $preview = new ArticlePreview([
-                'preview_id' => 'apv_'.substr(
-                    hash('sha256', $result->resultId().'|'.$request->requestId()),
-                    0,
-                    24
-                ),
-                'organization_id' => $organizationId,
-                'project_id' => $projectId,
-                'announcement_id' => $resolvedAnnouncementId,
-                'request_id' => $request->requestId(),
-                'result_id' => $result->resultId(),
-                'result_hash' => $result->resultHash(),
-                'title' => $title,
-                'body' => $contentText,
-                'created_at_utc' => $now,
-            ]);
+            try {
+                $preview = new ArticlePreview([
+                    'preview_id' => 'apv_'.substr(
+                        hash('sha256', $result->resultId().'|'.$request->requestId()),
+                        0,
+                        24
+                    ),
+                    'organization_id' => $organizationId,
+                    'project_id' => $projectId,
+                    'announcement_id' => $resolvedAnnouncementId,
+                    'request_id' => $request->requestId(),
+                    'result_id' => $result->resultId(),
+                    'result_hash' => $result->resultHash(),
+                    'title' => $title,
+                    'body' => $contentText,
+                    'created_at_utc' => $now,
+                ]);
+                if ($preview->previewId() === '' || $preview->body() === '') {
+                    throw new \RuntimeException(EditorialErrorCodes::PREVIEW_BUILD_FAILED);
+                }
+            } catch (\Throwable) {
+                $errorResult = $this->generationResultBuilder->buildErrorFromRequest(
+                    $request,
+                    $execution,
+                    EditorialErrorCodes::PREVIEW_BUILD_FAILED,
+                    'Preview construction failed.',
+                    ['duration_ms' => $durationMs]
+                );
+
+                return $this->failurePayload(
+                    $organizationId,
+                    $projectId,
+                    $announcementId,
+                    $stages,
+                    $blueprint,
+                    $context,
+                    $package,
+                    $request,
+                    $errorResult,
+                    $providerCode,
+                    $durationMs,
+                    $options,
+                    $now,
+                );
+            }
 
             // Preview entity is returned only; durable write is owned by GenerateArticlePreviewService.
             $stages['preview_built'] = true;
@@ -326,34 +427,147 @@ final class GenerationOrchestrator
                 'stages' => $stages,
             ];
         } catch (\Throwable $e) {
+            $code = EditorialErrorCodes::fromMessage($e->getMessage());
             $this->diagnostics->recordLastGeneration([
                 'at' => $this->utcNow(),
                 'ok' => false,
                 'organization_id' => $organizationId,
                 'project_id' => $projectId,
                 'announcement_id' => $announcementId,
-                'error' => $e->getMessage(),
+                'error' => $code,
                 'stages' => $stages,
             ]);
 
             return [
                 'ok' => false,
-                'error' => $e->getMessage(),
+                'error' => $code,
+                'error_code' => $code,
                 'stages' => $stages,
             ];
         }
     }
 
     /**
-     * @param  array<string, mixed>  $providerOut
+     * @param  array<string, mixed>  $stages
+     * @param  array<string, mixed>  $options
+     * @return array<string, mixed>
      */
-    private function providerNeutralContentText(array $providerOut): string
+    private function terminalProviderFailure(
+        string $organizationId,
+        string $projectId,
+        string $announcementId,
+        array $stages,
+        mixed $blueprint,
+        mixed $context,
+        mixed $package,
+        GenerationRequest $request,
+        string $errorCode,
+        string $errorMessage,
+        array $options,
+        int $durationMs,
+        string $providerCode,
+        ?ProviderExecutionReference $execution = null,
+    ): array {
+        $now = $this->utcNow();
+        $execution ??= new ProviderExecutionReference([
+            'execution_id' => 'exec_error',
+            'provider_code' => $providerCode !== '' ? $providerCode : 'unknown',
+            'started_at_utc' => $now,
+            'completed_at_utc' => $now,
+        ]);
+
+        $result = $this->generationResultBuilder->buildErrorFromRequest(
+            $request,
+            $execution,
+            $errorCode,
+            $this->safeErrorMessage($errorMessage),
+            ['duration_ms' => $durationMs]
+        );
+        $stages['build_005'] = true;
+
+        return $this->failurePayload(
+            $organizationId,
+            $projectId,
+            $announcementId,
+            $stages,
+            $blueprint,
+            $context,
+            $package,
+            $request,
+            $result,
+            $providerCode,
+            $durationMs,
+            $options,
+            $now,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $stages
+     * @param  array<string, mixed>  $options
+     * @return array<string, mixed>
+     */
+    private function failurePayload(
+        string $organizationId,
+        string $projectId,
+        string $announcementId,
+        array $stages,
+        mixed $blueprint,
+        mixed $context,
+        mixed $package,
+        GenerationRequest $request,
+        GenerationResult $result,
+        string $providerCode,
+        int $durationMs,
+        array $options,
+        string $now,
+    ): array {
+        $this->diagnostics->recordLastGeneration([
+            'at' => $now,
+            'ok' => false,
+            'organization_id' => $organizationId,
+            'project_id' => $projectId,
+            'announcement_id' => $announcementId,
+            'error' => $result->errorCode(),
+            'stages' => $stages,
+            'request_id' => $result->requestId(),
+            'result_id' => $result->resultId(),
+            'result_status' => $result->status(),
+            'provider_code' => $providerCode,
+            'duration_ms' => $durationMs,
+            'correlation_id' => $options['correlation_id'] ?? null,
+            'preview_available' => false,
+        ]);
+
+        return [
+            'ok' => false,
+            'error' => $result->errorCode(),
+            'error_code' => $result->errorCode(),
+            'stages' => $stages,
+            'request_id' => $result->requestId(),
+            'result_id' => $result->resultId(),
+            'result' => $result,
+            'blueprint' => $blueprint,
+            'context' => $context,
+            'package' => $package,
+            'request' => $request,
+        ];
+    }
+
+    private function safeErrorMessage(string $message): string
     {
-        if (! isset($providerOut['content_text']) || ! is_scalar($providerOut['content_text'])) {
-            throw new \InvalidArgumentException('provider_content_text_required');
+        $message = trim($message);
+        if ($message === '') {
+            return 'Generation failed.';
         }
 
-        return (string) $providerOut['content_text'];
+        // Never persist stacks or oversized blobs.
+        $message = preg_replace("/\r\n|\n|\r/", ' ', $message) ?? $message;
+        if (strlen($message) > 500) {
+            $message = substr($message, 0, 500);
+        }
+
+        return $message;
     }
 
     /**
@@ -365,7 +579,7 @@ final class GenerationOrchestrator
             $errors = isset($check['errors']) && is_array($check['errors'])
                 ? implode(',', $check['errors'])
                 : 'unknown';
-            throw new \InvalidArgumentException($prefix.':'.$errors);
+            throw new EditorialGenerationException($prefix, $prefix.':'.$errors);
         }
     }
 

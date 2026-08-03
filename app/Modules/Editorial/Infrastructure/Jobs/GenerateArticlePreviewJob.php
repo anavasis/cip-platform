@@ -8,6 +8,8 @@ use App\Infrastructure\Persistence\Models\PlatformJob;
 use App\Modules\Editorial\Application\CapabilityGate;
 use App\Modules\Editorial\Application\GenerateArticlePreviewService;
 use App\Modules\Editorial\Domain\Events\GenerationFailed;
+use App\Modules\Editorial\Domain\GenerationResult\EditorialErrorCodes;
+use App\Modules\Editorial\Domain\GenerationResult\EditorialGenerationException;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Cache;
@@ -47,22 +49,22 @@ class GenerateArticlePreviewJob implements ShouldQueue
         $actorId = isset($payload['actor_id']) ? trim((string) $payload['actor_id']) : null;
         $correlationId = trim((string) ($payload['correlation_id'] ?? $job->id));
         $regenerate = ($payload['regenerate'] ?? false) === true;
-        $failureEventEmitted = false;
+        $domainFailureRecorded = false;
         $lock = null;
         $lockAcquired = false;
 
         try {
             if ($organizationId === '' || $projectId === '' || $announcementId === '') {
-                throw new RuntimeException('invalid_payload');
+                throw EditorialGenerationException::permanent(EditorialErrorCodes::INVALID_PAYLOAD);
             }
 
             if (trim((string) ($payload['organization_id'] ?? '')) !== $organizationId
                 || trim((string) ($payload['project_id'] ?? '')) !== $projectId) {
-                throw new RuntimeException('invalid_payload');
+                throw EditorialGenerationException::permanent(EditorialErrorCodes::INVALID_PAYLOAD);
             }
 
             if (! $capabilityGate->generationAllowed($organizationId, $projectId)) {
-                throw new RuntimeException('capability_disabled');
+                throw EditorialGenerationException::permanent(EditorialErrorCodes::CAPABILITY_DISABLED);
             }
 
             $lock = Cache::lock(
@@ -71,7 +73,7 @@ class GenerateArticlePreviewJob implements ShouldQueue
             );
             $lockAcquired = $lock->get();
             if (! $lockAcquired) {
-                throw new RuntimeException('announcement_locked');
+                throw new RuntimeException(EditorialErrorCodes::ANNOUNCEMENT_LOCKED);
             }
 
             $result = $service->executeLocked(
@@ -84,7 +86,11 @@ class GenerateArticlePreviewJob implements ShouldQueue
             );
 
             if (($result['ok'] ?? false) !== true) {
-                throw new RuntimeException((string) ($result['error_code'] ?? $result['error'] ?? 'generation_failed'));
+                $domainFailureRecorded = ($result['failure_event_emitted'] ?? false) === true
+                    || isset($result['result_id']);
+                $errorCode = (string) ($result['error_code'] ?? $result['error'] ?? EditorialErrorCodes::PROVIDER_ERROR);
+                $errorCode = EditorialErrorCodes::fromMessage($errorCode);
+                throw EditorialGenerationException::permanent($errorCode, $errorCode);
             }
 
             $jobEngine->markCompleted($job, [
@@ -97,7 +103,8 @@ class GenerateArticlePreviewJob implements ShouldQueue
         } catch (Throwable $e) {
             $errorCode = $this->exceptionErrorCode($e);
 
-            if (! $failureEventEmitted && $organizationId !== '' && $projectId !== '') {
+            // Fallback GenerationFailed only when service did not already record a domain failure.
+            if (! $domainFailureRecorded && $organizationId !== '' && $projectId !== '') {
                 try {
                     $eventBus->dispatch(new GenerationFailed(
                         organizationId: $organizationId,
@@ -107,17 +114,18 @@ class GenerateArticlePreviewJob implements ShouldQueue
                         actorId: $actorId !== '' ? $actorId : null,
                         correlationId: $correlationId,
                     ));
-                    $failureEventEmitted = true;
                 } catch (Throwable) {
                     // ignore
                 }
             }
 
-            if ($this->attempts() >= $this->tries || ! $this->isRetryable($errorCode, $e)) {
+            if ($this->attempts() >= $this->tries || ! $this->isRetryable($errorCode)) {
                 $jobEngine->markFailed($job, $errorCode);
             }
 
-            throw $e;
+            throw $e instanceof EditorialGenerationException
+                ? $e
+                : new RuntimeException($errorCode, 0, $e);
         } finally {
             if ($lockAcquired && $lock !== null) {
                 try {
@@ -138,7 +146,7 @@ class GenerateArticlePreviewJob implements ShouldQueue
             if ($job->completed_at !== null) {
                 return;
             }
-            $error = $exception ? $this->exceptionErrorCode($exception) : 'editorial_job_failed';
+            $error = $exception ? $this->exceptionErrorCode($exception) : EditorialErrorCodes::EDITORIAL_JOB_FAILED;
             app(JobEngineService::class)->markFailed($job, $error);
         } catch (Throwable) {
         }
@@ -146,30 +154,15 @@ class GenerateArticlePreviewJob implements ShouldQueue
 
     private function exceptionErrorCode(Throwable $throwable): string
     {
-        $message = trim($throwable->getMessage());
+        if ($throwable instanceof EditorialGenerationException) {
+            return $throwable->errorCode();
+        }
 
-        return preg_match('/^[a-z][a-z0-9_]{1,63}$/', $message) === 1
-            ? $message
-            : 'editorial_job_failed';
+        return EditorialErrorCodes::fromMessage(trim($throwable->getMessage()));
     }
 
-    private function isRetryable(string $errorCode, Throwable $throwable): bool
+    private function isRetryable(string $errorCode): bool
     {
-        if (in_array($errorCode, [
-            'capability_disabled',
-            'invalid_payload',
-            'announcement_not_found',
-        ], true)) {
-            return false;
-        }
-
-        if (in_array($errorCode, [
-            'announcement_locked',
-            'editorial_job_failed',
-        ], true)) {
-            return true;
-        }
-
-        return ! $throwable instanceof RuntimeException;
+        return EditorialErrorCodes::isRetryable($errorCode);
     }
 }
