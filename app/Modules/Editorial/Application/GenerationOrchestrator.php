@@ -24,8 +24,8 @@ use App\Modules\Editorial\Domain\PromptPackage\PromptPackageValidator;
 use App\Modules\Editorial\Domain\PromptPackage\PromptTemplateReference;
 
 /**
- * Editorial Slice A orchestrator: Announcement → BUILD-001…005 → provider → preview.
- * Depends on AiProviderInterface only.
+ * Editorial Slice A orchestrator: Announcement → BUILD-001…005 → provider → preview entity.
+ * Depends on AiProviderInterface only. Does not persist ArticlePreview.
  */
 final class GenerationOrchestrator
 {
@@ -67,6 +67,7 @@ final class GenerationOrchestrator
             'build_004' => false,
             'provider' => false,
             'build_005' => false,
+            'preview_built' => false,
             'preview_stored' => false,
         ];
 
@@ -287,10 +288,9 @@ final class GenerationOrchestrator
                 'created_at_utc' => $now,
             ]);
 
-            if (! $this->previewRepository->save($preview)) {
-                throw new \RuntimeException('preview_save_failed');
-            }
-            $stages['preview_stored'] = true;
+            // Preview entity is returned only; durable write is owned by GenerateArticlePreviewService.
+            $stages['preview_built'] = true;
+            $stages['preview_stored'] = false;
 
             $this->diagnostics->recordLastGeneration([
                 'at' => $now,
@@ -307,7 +307,7 @@ final class GenerationOrchestrator
                 'provider_code' => $providerCode,
                 'model_id' => self::MODEL_ID,
                 'duration_ms' => $durationMs,
-                'preview_available' => true,
+                'preview_available' => false,
                 'correlation_id' => $options['correlation_id'] ?? null,
             ]);
 

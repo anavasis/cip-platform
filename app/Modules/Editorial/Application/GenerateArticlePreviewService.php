@@ -281,74 +281,85 @@ final class GenerateArticlePreviewService
             $preview = $out['preview'];
 
             $this->blueprints->save($organizationId, $projectId, $blueprint);
-            $this->events->dispatch(new BlueprintCreated(
-                organizationId: $organizationId,
-                projectId: $projectId,
-                blueprintId: $blueprint->blueprintId(),
-                announcementId: $announcementId,
-                actorId: $actorId,
-                correlationId: $correlationId,
-            ));
-
             $this->contexts->save($organizationId, $projectId, $context);
-            $this->events->dispatch(new PromptContextCreated(
-                organizationId: $organizationId,
-                projectId: $projectId,
-                contextId: $context->contextId(),
-                contextHash: $context->contextHash(),
-                announcementId: $announcementId,
-                actorId: $actorId,
-                correlationId: $correlationId,
-            ));
-
             $this->packages->save($organizationId, $projectId, $package);
-            $this->events->dispatch(new PromptPackageCreated(
-                organizationId: $organizationId,
-                projectId: $projectId,
-                packageId: $package->packageId(),
-                packageHash: $package->packageHash(),
-                announcementId: $announcementId,
-                actorId: $actorId,
-                correlationId: $correlationId,
-            ));
-
             $this->requests->save($organizationId, $projectId, $request);
-            $this->events->dispatch(new GenerationRequested(
-                organizationId: $organizationId,
-                projectId: $projectId,
-                requestId: $request->requestId(),
-                requestHash: $request->requestHash(),
-                announcementId: $announcementId,
-                actorId: $actorId,
-                correlationId: $correlationId,
-            ));
 
-            $this->results->save($organizationId, $projectId, $result);
-            $this->previews->save($preview);
+            if (! $this->results->save($organizationId, $projectId, $result)) {
+                throw new RuntimeException('generation_result_persist_failed');
+            }
+            if (! $this->previews->save($preview)) {
+                throw new RuntimeException('preview_save_failed');
+            }
 
-            $this->events->dispatch(new ArticlePreviewCreated(
-                organizationId: $organizationId,
-                projectId: $projectId,
-                previewId: $preview->previewId(),
-                resultId: $result->resultId(),
-                announcementId: $announcementId,
-                requestId: $request->requestId(),
-                actorId: $actorId,
-                correlationId: $correlationId,
-            ));
+            $pendingEvents = [
+                new BlueprintCreated(
+                    organizationId: $organizationId,
+                    projectId: $projectId,
+                    blueprintId: $blueprint->blueprintId(),
+                    announcementId: $announcementId,
+                    actorId: $actorId,
+                    correlationId: $correlationId,
+                ),
+                new PromptContextCreated(
+                    organizationId: $organizationId,
+                    projectId: $projectId,
+                    contextId: $context->contextId(),
+                    contextHash: $context->contextHash(),
+                    announcementId: $announcementId,
+                    actorId: $actorId,
+                    correlationId: $correlationId,
+                ),
+                new PromptPackageCreated(
+                    organizationId: $organizationId,
+                    projectId: $projectId,
+                    packageId: $package->packageId(),
+                    packageHash: $package->packageHash(),
+                    announcementId: $announcementId,
+                    actorId: $actorId,
+                    correlationId: $correlationId,
+                ),
+                new GenerationRequested(
+                    organizationId: $organizationId,
+                    projectId: $projectId,
+                    requestId: $request->requestId(),
+                    requestHash: $request->requestHash(),
+                    announcementId: $announcementId,
+                    actorId: $actorId,
+                    correlationId: $correlationId,
+                ),
+                new ArticlePreviewCreated(
+                    organizationId: $organizationId,
+                    projectId: $projectId,
+                    previewId: $preview->previewId(),
+                    resultId: $result->resultId(),
+                    announcementId: $announcementId,
+                    requestId: $request->requestId(),
+                    actorId: $actorId,
+                    correlationId: $correlationId,
+                ),
+                new GenerationCompleted(
+                    organizationId: $organizationId,
+                    projectId: $projectId,
+                    requestId: $request->requestId(),
+                    resultId: $result->resultId(),
+                    resultHash: $result->resultHash(),
+                    announcementId: $announcementId,
+                    previewId: $preview->previewId(),
+                    actorId: $actorId,
+                    correlationId: $correlationId,
+                ),
+            ];
 
-            $this->events->dispatch(new GenerationCompleted(
-                organizationId: $organizationId,
-                projectId: $projectId,
-                requestId: $request->requestId(),
-                resultId: $result->resultId(),
-                resultHash: $result->resultHash(),
-                announcementId: $announcementId,
-                previewId: $preview->previewId(),
-                actorId: $actorId,
-                correlationId: $correlationId,
-            ));
+            DB::afterCommit(function () use ($pendingEvents) {
+                foreach ($pendingEvents as $event) {
+                    $this->events->dispatch($event);
+                }
+            });
         });
+
+        $stages = $out['stages'] ?? [];
+        $stages['preview_stored'] = true;
 
         return [
             'ok' => true,
@@ -360,7 +371,7 @@ final class GenerateArticlePreviewService
             'result_id' => $out['result_id'],
             'preview_id' => $out['preview_id'],
             'blueprint_id' => $out['blueprint_id'],
-            'stages' => $out['stages'],
+            'stages' => $stages,
         ];
     }
 

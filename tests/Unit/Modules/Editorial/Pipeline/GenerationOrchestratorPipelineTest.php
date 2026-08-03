@@ -78,7 +78,8 @@ class GenerationOrchestratorPipelineTest extends TestCase
             'build_004' => true,
             'provider' => true,
             'build_005' => true,
-            'preview_stored' => true,
+            'preview_built' => true,
+            'preview_stored' => false,
         ], $out['stages']);
 
         /** @var ArticlePreview $preview */
@@ -92,7 +93,10 @@ class GenerationOrchestratorPipelineTest extends TestCase
 
         $expectedId = 'apv_'.substr(hash('sha256', $out['result_id'].'|'.$out['request_id']), 0, 24);
         $this->assertSame($expectedId, $preview->previewId());
-        $this->assertNotNull($previews->findById($preview->organizationId(), $preview->projectId(), $preview->previewId()));
+        // Orchestrator must not persist the preview.
+        $this->assertNull($previews->findById($preview->organizationId(), $preview->projectId(), $preview->previewId()));
+        $source = file_get_contents((new ReflectionClass(GenerationOrchestrator::class))->getFileName());
+        $this->assertStringNotContainsString('previewRepository->save', $source);
     }
 
     public function test_preview_title_fallback_constant_present_in_orchestrator(): void
