@@ -26,6 +26,7 @@ final readonly class ProductionAcquisitionOrchestrator
         string $projectId,
         array $sourceIds,
         string $correlationId = '',
+        string $requestedRunId = '',
     ): AcquisitionRunResult {
         $startedAt = microtime(true);
         $organizationId = trim($organizationId);
@@ -64,7 +65,7 @@ final readonly class ProductionAcquisitionOrchestrator
             );
         }
 
-        $runId = $this->generateRunId();
+        $runId = trim($requestedRunId) !== '' ? trim($requestedRunId) : $this->generateRunId();
         $this->diagnostics->recordProductionRun($organizationId, $projectId, [
             'run_id' => $runId,
             'status' => 'running',
