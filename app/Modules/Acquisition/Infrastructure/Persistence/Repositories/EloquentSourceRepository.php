@@ -2,6 +2,7 @@
 
 namespace App\Modules\Acquisition\Infrastructure\Persistence\Repositories;
 
+use App\Modules\Acquisition\Domain\Sources\SourceDueEligibility;
 use App\Modules\Acquisition\Domain\Sources\SourceRepositoryInterface;
 use App\Modules\Acquisition\Infrastructure\Persistence\Models\Source;
 use Throwable;
@@ -52,10 +53,9 @@ final class EloquentSourceRepository implements SourceRepositoryInterface
         return Source::query()
             ->where('organization_id', $organizationId)
             ->where('project_id', $projectId)
-            ->where('enabled', true)
-            ->where('manual_only', false)
-            ->orderBy('last_checked_at')
-            ->orderBy('slug')
+            ->tap(static fn ($query) => SourceDueEligibility::constrainEligible($query))
+            ->orderBy('id')
+            ->limit(SourceDueEligibility::DEFAULT_LIMIT)
             ->get()
             ->map(static fn (Source $source): array => $source->toArray())
             ->all();

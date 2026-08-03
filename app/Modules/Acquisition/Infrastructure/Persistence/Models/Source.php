@@ -59,4 +59,13 @@ class Source extends Model
             ->addSeconds(max(1, (int) $this->acquire_interval_seconds))
             ->lessThanOrEqualTo($at ?? now());
     }
+
+    /**
+     * @param  Builder<Source>  $query
+     * @return Builder<Source>
+     */
+    public function scopeDueForAcquisition($query, ?CarbonInterface $at = null)
+    {
+        return \App\Modules\Acquisition\Domain\Sources\SourceDueEligibility::constrainEligible($query, $at);
+    }
 }

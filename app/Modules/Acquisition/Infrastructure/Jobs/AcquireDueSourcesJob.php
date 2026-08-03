@@ -5,9 +5,9 @@ namespace App\Modules\Acquisition\Infrastructure\Jobs;
 use App\Application\Services\JobEngineService;
 use App\Infrastructure\Persistence\Models\PlatformJob;
 use App\Modules\Acquisition\Application\CapabilityGate;
+use App\Modules\Acquisition\Domain\Sources\SourceDueEligibility;
 use App\Modules\Acquisition\Infrastructure\Persistence\Models\Source;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Cache;
 use RuntimeException;
@@ -84,10 +84,8 @@ class AcquireDueSourcesJob implements ShouldQueue
 
         $query = Source::query()
             ->where('organization_id', $organizationId)
-            ->where('project_id', $projectId)
-            ->where('enabled', true)
-            ->where('manual_only', false);
-        $this->constrainToDue($query)
+            ->where('project_id', $projectId);
+        SourceDueEligibility::constrainEligible($query)
             ->orderBy('id')
             ->chunkById(100, function ($sources) use (
                 $jobEngine,
@@ -98,7 +96,7 @@ class AcquireDueSourcesJob implements ShouldQueue
                 &$dispatchedIds,
             ): void {
                 foreach ($sources as $source) {
-                    if (! $source->isDueForAcquisition()) {
+                    if (! SourceDueEligibility::isDue($source)) {
                         continue;
                     }
 
@@ -118,7 +116,7 @@ class AcquireDueSourcesJob implements ShouldQueue
                             ->first();
 
                         if ($fresh === null || ! $fresh->enabled || $fresh->manual_only
-                            || ! $fresh->isDueForAcquisition()
+                            || ! SourceDueEligibility::isDue($fresh)
                             || ! $this->capabilitiesEnabled(
                                 $capabilityGate,
                                 $organizationId,
@@ -170,46 +168,5 @@ class AcquireDueSourcesJob implements ShouldQueue
             $organizationId,
             $projectId,
         );
-    }
-
-    private function constrainToDue(Builder $query): Builder
-    {
-        $driver = $query->getConnection()->getDriverName();
-        $latestAttempt = match ($driver) {
-            'sqlite' => <<<'SQL'
-                datetime(
-                    CASE
-                        WHEN last_acquired_at IS NULL THEN last_checked_at
-                        WHEN last_checked_at IS NULL THEN last_acquired_at
-                        WHEN last_acquired_at >= last_checked_at THEN last_acquired_at
-                        ELSE last_checked_at
-                    END,
-                    '+' || acquire_interval_seconds || ' seconds'
-                )
-                SQL,
-            'pgsql' => <<<'SQL'
-                GREATEST(
-                    COALESCE(last_acquired_at, last_checked_at),
-                    COALESCE(last_checked_at, last_acquired_at)
-                ) + (acquire_interval_seconds * INTERVAL '1 second')
-                SQL,
-            default => <<<'SQL'
-                DATE_ADD(
-                    GREATEST(
-                        COALESCE(last_acquired_at, last_checked_at),
-                        COALESCE(last_checked_at, last_acquired_at)
-                    ),
-                    INTERVAL acquire_interval_seconds SECOND
-                )
-                SQL,
-        };
-
-        return $query->where(function (Builder $due) use ($latestAttempt): void {
-            $due->where(function (Builder $neverAttempted): void {
-                $neverAttempted
-                    ->whereNull('last_acquired_at')
-                    ->whereNull('last_checked_at');
-            })->orWhereRaw("({$latestAttempt}) <= CURRENT_TIMESTAMP");
-        });
     }
 }

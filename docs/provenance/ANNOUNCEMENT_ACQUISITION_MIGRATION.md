@@ -92,17 +92,29 @@ legacy runtime dependencies:
   rows are tenant-scoped and locked, insert races are re-read and classified,
   and revision increments are atomic.
 - Acquisition runs are persisted as running before orchestration, always
-  terminalized, and emit one failure event per failed attempt. Permanent errors
-  do not retry; transient transport and persistence errors use up to three
-  queue attempts.
+  terminalized through `AcquisitionRunTerminalizer` (bounded retries, dedicated
+  exception on persistence failure, failed-job hook retry), and emit one failure
+  event per failed attempt. Terminal completed/failed states cannot regress to
+  `running`. Permanent errors do not retry; transient transport and persistence
+  errors use up to three queue attempts.
+- Due-source eligibility is canonical in `SourceDueEligibility`: both
+  `EloquentSourceRepository::findDue()` and `AcquireDueSourcesJob` apply the
+  same tenant-scoped enabled/non-manual/interval policy (`last_acquired_at` /
+  `last_checked_at` + `acquire_interval_seconds`), with bounded repository
+  results.
+- Safe feed transport uses an explicit cURL `CurlHandler` with `CURLOPT_RESOLVE`
+  pinning, fail-closed when cURL is unavailable, no StreamHandler fallback, and
+  manual redirect revalidation. Real local-server integration tests cover Host
+  pinning, redirects, and bounded oversized/compressed responses.
 - Acquisition runs now enforce tenant foreign keys, run items enforce their
   run/source foreign keys, and persistence includes run-list and due-source
   indexes. Announcement tenant/source foreign keys and project-scoped
   uniqueness remain intact.
 - Regression coverage includes safe defaults, capability isolation, scheduler
-  dispatch/overlap behavior, DNS pinning and redirect repinning, tenant
-  diagnostics/evidence isolation, unique-insert recovery, retry behavior, and
-  a PostgreSQL-only genuine lifecycle concurrency test.
+  dispatch/overlap behavior, DNS pinning and redirect repinning, real cURL
+  transport integration, run terminalization, due eligibility consistency,
+  tenant diagnostics/evidence isolation, unique-insert recovery, retry behavior,
+  and a PostgreSQL-only genuine lifecycle concurrency test.
 
 ## Deferred work
 
