@@ -27,12 +27,10 @@ final class FeedPreviewParser
             return $this->errorResult('body_too_large');
         }
 
-        if (stripos($body, '<!DOCTYPE') !== false) {
-            return $this->errorResult('doctype_not_allowed');
-        }
+        $dtdError = $this->rejectPrologDtdDeclarations($body);
 
-        if (stripos($body, '<!ENTITY') !== false) {
-            return $this->errorResult('entity_not_allowed');
+        if ($dtdError !== '') {
+            return $this->errorResult($dtdError);
         }
 
         if (! $this->hasRecognizedFeedStart($body)) {
@@ -83,6 +81,35 @@ final class FeedPreviewParser
         }
 
         return preg_match('/^(<\?xml[^>]*>\s*)?<(rss|feed)\b/i', $trimmed) === 1;
+    }
+
+    /**
+     * Reject DTD/entity declarations only in the XML prolog (before the feed root).
+     * Literal <!DOCTYPE / <!ENTITY strings inside CDATA after <rss>/<feed> are allowed.
+     */
+    private function rejectPrologDtdDeclarations(string $body): string
+    {
+        $trimmed = ltrim($body);
+
+        if (strncmp($trimmed, "\xEF\xBB\xBF", 3) === 0) {
+            $trimmed = ltrim(substr($trimmed, 3));
+        }
+
+        $prolog = $trimmed;
+
+        if (preg_match('/<(rss|feed)\b/i', $trimmed, $matches, PREG_OFFSET_CAPTURE) === 1) {
+            $prolog = substr($trimmed, 0, $matches[0][1]);
+        }
+
+        if (stripos($prolog, '<!DOCTYPE') !== false) {
+            return 'doctype_not_allowed';
+        }
+
+        if (stripos($prolog, '<!ENTITY') !== false) {
+            return 'entity_not_allowed';
+        }
+
+        return '';
     }
 
     /** @return array<string, mixed> */
