@@ -154,6 +154,28 @@ class FeedPreviewParserTest extends TestCase
         $this->assertSame('doctype_not_allowed', $result['error_code']);
     }
 
+    public function test_rejects_entity_declaration_in_prolog_without_doctype(): void
+    {
+        $result = $this->parser->parse(
+            '<!ENTITY foo SYSTEM "file:///etc/passwd">'.
+            '<rss version="2.0"><channel/></rss>',
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('entity_not_allowed', $result['error_code']);
+    }
+
+    public function test_rejects_malformed_dtd_prolog_before_rss(): void
+    {
+        $result = $this->parser->parse(
+            '<!DOCTYPE rss [<!ENTITY xxe SYSTEM "file:///etc/passwd"'.
+            '<rss version="2.0"><channel><item><title>bypass</title></item></channel></rss>',
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('doctype_not_allowed', $result['error_code']);
+    }
+
     public function test_rejects_empty_body(): void
     {
         $result = $this->parser->parse('');
