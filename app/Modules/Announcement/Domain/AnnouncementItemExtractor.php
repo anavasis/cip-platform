@@ -47,6 +47,12 @@ final class AnnouncementItemExtractor
             return $this->extractHtmlAnnouncements($body, $id);
         }
 
+        $dtdError = $this->rejectPrologDtdDeclarations($body);
+
+        if ($dtdError !== '') {
+            return $this->failure($dtdError);
+        }
+
         if ($this->hasRecognizedFeedStart($body)) {
             return $this->extractFeed($body, $id);
         }
@@ -61,14 +67,6 @@ final class AnnouncementItemExtractor
     {
         if (! class_exists(\DOMDocument::class) || ! class_exists(\DOMXPath::class)) {
             return $this->failure('parser_unavailable');
-        }
-
-        if (stripos($content, '<!DOCTYPE') !== false) {
-            return $this->failure('doctype_not_allowed');
-        }
-
-        if (stripos($content, '<!ENTITY') !== false) {
-            return $this->failure('entity_not_allowed');
         }
 
         $previousLibxmlSetting = libxml_use_internal_errors(true);
@@ -322,6 +320,35 @@ final class AnnouncementItemExtractor
         }
 
         return preg_match('/^(<\?xml[^>]*>\s*)?<(rss|feed)\b/i', $trimmed) === 1;
+    }
+
+    /**
+     * Reject DTD/entity declarations only in the XML prolog (before the feed root).
+     * Literal <!DOCTYPE / <!ENTITY strings inside CDATA after <rss>/<feed> are allowed.
+     */
+    private function rejectPrologDtdDeclarations(string $body): string
+    {
+        $trimmed = ltrim($body);
+
+        if (strncmp($trimmed, "\xEF\xBB\xBF", 3) === 0) {
+            $trimmed = ltrim(substr($trimmed, 3));
+        }
+
+        $prolog = $trimmed;
+
+        if (preg_match('/<(rss|feed)\b/i', $trimmed, $matches, PREG_OFFSET_CAPTURE) === 1) {
+            $prolog = substr($trimmed, 0, $matches[0][1]);
+        }
+
+        if (stripos($prolog, '<!DOCTYPE') !== false) {
+            return 'doctype_not_allowed';
+        }
+
+        if (stripos($prolog, '<!ENTITY') !== false) {
+            return 'entity_not_allowed';
+        }
+
+        return '';
     }
 
     private function readRssItemLink(\DOMElement $item): string
