@@ -169,10 +169,6 @@ class SafeUrlGuard
 
         if ($path !== '') {
             $path = preg_replace('#/+#', '/', $path) ?? '';
-
-            if ($path !== '/' && str_ends_with($path, '/')) {
-                $path = rtrim($path, '/');
-            }
         }
 
         $urlHost = filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false

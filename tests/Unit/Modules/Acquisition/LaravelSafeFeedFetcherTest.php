@@ -151,6 +151,76 @@ class LaravelSafeFeedFetcherTest extends TestCase
         ], $pins);
     }
 
+    public function test_trailing_slash_redirect_terminates_without_loop(): void
+    {
+        $requestedUrls = [];
+        $transport = new class($requestedUrls) extends CurlPinnedHttpTransport
+        {
+            /** @param array<int, string> $requestedUrls */
+            public function __construct(private array &$requestedUrls) {}
+
+            public function get(string $url, array $validatedIps, array $options): array
+            {
+                $this->requestedUrls[] = $url;
+
+                if ($url === 'https://studymentor.gr/feed') {
+                    return [
+                        'transport_error' => '',
+                        'status_code' => 301,
+                        'content_type' => '',
+                        'location' => 'https://studymentor.gr/feed/',
+                        'body' => '',
+                        'truncated_prefix' => '',
+                        'body_size' => 0,
+                        'body_too_large' => false,
+                    ];
+                }
+
+                if ($url === 'https://studymentor.gr/feed/') {
+                    return [
+                        'transport_error' => '',
+                        'status_code' => 200,
+                        'content_type' => 'application/rss+xml',
+                        'location' => '',
+                        'body' => '<rss/>',
+                        'truncated_prefix' => '',
+                        'body_size' => 6,
+                        'body_too_large' => false,
+                    ];
+                }
+
+                return [
+                    'transport_error' => 'unexpected_url',
+                    'status_code' => 0,
+                    'content_type' => '',
+                    'location' => '',
+                    'body' => '',
+                    'truncated_prefix' => '',
+                    'body_size' => 0,
+                    'body_too_large' => false,
+                ];
+            }
+        };
+        $guard = new SafeUrlGuard(
+            static fn (string $host): array => $host === 'studymentor.gr' ? ['93.184.216.34'] : [],
+        );
+
+        $result = (new LaravelSafeFeedFetcher($guard, $transport))->fetch(
+            'https://studymentor.gr/feed',
+            ['studymentor.gr'],
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('', $result['error_code']);
+        $this->assertSame('https://studymentor.gr/feed/', $result['final_url']);
+        $this->assertSame(200, $result['http_status']);
+        $this->assertSame([
+            'https://studymentor.gr/feed',
+            'https://studymentor.gr/feed/',
+        ], $requestedUrls);
+        $this->assertNotSame('too_many_redirects', $result['error_code']);
+    }
+
     public function test_fetcher_source_forbids_stream_handler_fallback(): void
     {
         $fetcher = (string) file_get_contents(base_path(
