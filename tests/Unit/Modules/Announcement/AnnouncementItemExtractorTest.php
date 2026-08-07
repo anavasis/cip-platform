@@ -217,7 +217,7 @@ class AnnouncementItemExtractorTest extends TestCase
         $result = $this->extractor->extract(
             '<html><body><a href="https://example.com/asep">ASEP Item</a></body></html>',
             self::SOURCE_ID,
-            'html',
+            'rss',
             'asep_announcements_v1',
         );
 
@@ -225,5 +225,6 @@ class AnnouncementItemExtractorTest extends TestCase
         $this->assertSame('', $result['error_code']);
         $this->assertCount(1, $result['candidates']);
         $this->assertSame('ASEP Item', $result['candidates'][0]->title());
+        $this->assertSame('https://example.com/asep', $result['candidates'][0]->canonicalUrl());
     }
 }
