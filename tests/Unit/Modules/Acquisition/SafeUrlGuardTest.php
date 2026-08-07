@@ -107,4 +107,44 @@ class SafeUrlGuardTest extends TestCase
             $result['ips'],
         );
     }
+
+    #[DataProvider('pathNormalizationCases')]
+    public function test_path_normalization_preserves_trailing_slash(string $url, string $expectedUrl): void
+    {
+        $guard = new SafeUrlGuard(
+            static fn (string $host): array => ['93.184.216.34'],
+        );
+
+        $result = $guard->validate($url, ['studymentor.gr', 'example.test']);
+
+        $this->assertTrue($result['ok'], $result['error']);
+        $this->assertSame($expectedUrl, $result['url']);
+    }
+
+    /** @return array<string, array{string, string}> */
+    public static function pathNormalizationCases(): array
+    {
+        return [
+            'feed trailing slash preserved' => [
+                'https://studymentor.gr/feed/',
+                'https://studymentor.gr/feed/',
+            ],
+            'root slash preserved' => [
+                'https://studymentor.gr/',
+                'https://studymentor.gr/',
+            ],
+            'query with trailing slash preserved' => [
+                'https://studymentor.gr/feed/?a=1',
+                'https://studymentor.gr/feed/?a=1',
+            ],
+            'duplicate slashes collapsed with trailing slash preserved' => [
+                'https://studymentor.gr//feed//',
+                'https://studymentor.gr/feed/',
+            ],
+            'non-trailing path unchanged' => [
+                'https://example.test/feed',
+                'https://example.test/feed',
+            ],
+        ];
+    }
 }
