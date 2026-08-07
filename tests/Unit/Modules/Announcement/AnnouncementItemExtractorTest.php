@@ -7,6 +7,17 @@ use PHPUnit\Framework\TestCase;
 
 class AnnouncementItemExtractorTest extends TestCase
 {
+    private const SOURCE_ID = '0198-1111-7222-8333-000000000001';
+
+    private AnnouncementItemExtractor $extractor;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->extractor = new AnnouncementItemExtractor;
+    }
+
     public function test_extracts_the_full_rss_item_list_beyond_preview_limit(): void
     {
         $items = '';
@@ -19,9 +30,9 @@ class AnnouncementItemExtractorTest extends TestCase
             );
         }
 
-        $result = (new AnnouncementItemExtractor)->extract(
+        $result = $this->extractor->extract(
             '<?xml version="1.0"?><rss version="2.0"><channel>'.$items.'</channel></rss>',
-            '0198-1111-7222-8333-000000000001',
+            self::SOURCE_ID,
             'rss',
         );
 
@@ -32,23 +43,187 @@ class AnnouncementItemExtractorTest extends TestCase
         $this->assertSame('https://example.com/items/7', $result['candidates'][6]->canonicalUrl());
     }
 
-    public function test_rejects_oversized_and_dangerous_content(): void
+    public function test_parses_normal_atom_and_extracts_candidates(): void
     {
-        $extractor = new AnnouncementItemExtractor;
-        $sourceId = '0198-1111-7222-8333-000000000001';
+        $result = $this->extractor->extract(
+            '<?xml version="1.0"?>'.
+            '<feed xmlns="http://www.w3.org/2005/Atom">'.
+            '<entry><title>Atom One</title><link href="https://example.com/a"/>'.
+            '<id>atom-1</id><updated>2024-01-01T00:00:00Z</updated></entry>'.
+            '</feed>',
+            self::SOURCE_ID,
+            'atom',
+        );
 
-        $oversized = $extractor->extract(str_repeat('x', 2097153), $sourceId, 'rss');
-        $nulByte = $extractor->extract("<rss>\0</rss>", $sourceId, 'rss');
-        $doctype = $extractor->extract(
-            '<!DOCTYPE rss [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><rss><channel/></rss>',
-            $sourceId,
+        $this->assertTrue($result['success']);
+        $this->assertSame('', $result['error_code']);
+        $this->assertCount(1, $result['candidates']);
+        $this->assertSame('Atom One', $result['candidates'][0]->title());
+        $this->assertSame('https://example.com/a', $result['candidates'][0]->canonicalUrl());
+    }
+
+    public function test_accepts_wordpress_style_content_encoded_cdata_with_doctype_html(): void
+    {
+        $result = $this->extractor->extract(
+            '<?xml version="1.0" encoding="UTF-8"?>'.
+            '<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">'.
+            '<channel><title>StudyMentor</title>'.
+            '<item><title>Post</title><link>https://studymentor.gr/post/</link>'.
+            '<guid>https://studymentor.gr/post/</guid>'.
+            '<content:encoded><![CDATA['."\n".
+            '<!DOCTYPE html>'."\n".
+            '<html lang="el"><body><p>Content</p></body></html>'."\n".
+            ']]></content:encoded></item></channel></rss>',
+            self::SOURCE_ID,
             'rss',
         );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('', $result['error_code']);
+        $this->assertNotSame('doctype_not_allowed', $result['error_code']);
+        $this->assertCount(1, $result['candidates']);
+        $this->assertSame('Post', $result['candidates'][0]->title());
+        $this->assertSame('https://studymentor.gr/post/', $result['candidates'][0]->canonicalUrl());
+    }
+
+    public function test_accepts_literal_entity_declaration_inside_cdata(): void
+    {
+        $result = $this->extractor->extract(
+            '<?xml version="1.0"?><rss version="2.0"><channel>'.
+            '<item><title>Entity text</title><link>https://example.com/entity</link>'.
+            '<description><![CDATA[See <!ENTITY example "text"> in docs]]></description>'.
+            '</item></channel></rss>',
+            self::SOURCE_ID,
+            'rss',
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('', $result['error_code']);
+        $this->assertNotSame('entity_not_allowed', $result['error_code']);
+        $this->assertCount(1, $result['candidates']);
+        $this->assertSame('Entity text', $result['candidates'][0]->title());
+    }
+
+    public function test_rejects_external_system_doctype_before_rss(): void
+    {
+        $result = $this->extractor->extract(
+            '<!DOCTYPE rss SYSTEM "file:///etc/passwd"><rss version="2.0"><channel/></rss>',
+            self::SOURCE_ID,
+            'rss',
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('doctype_not_allowed', $result['error_code']);
+        $this->assertSame([], $result['candidates']);
+    }
+
+    public function test_rejects_public_doctype_before_rss(): void
+    {
+        $result = $this->extractor->extract(
+            '<!DOCTYPE rss PUBLIC "-//Example//DTD RSS//EN" "http://example.com/rss.dtd">'.
+            '<rss version="2.0"><channel/></rss>',
+            self::SOURCE_ID,
+            'rss',
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('doctype_not_allowed', $result['error_code']);
+    }
+
+    public function test_rejects_internal_subset_dtd_before_rss(): void
+    {
+        $result = $this->extractor->extract(
+            '<!DOCTYPE rss [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>'.
+            '<rss version="2.0"><channel><title>&xxe;</title></channel></rss>',
+            self::SOURCE_ID,
+            'rss',
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('doctype_not_allowed', $result['error_code']);
+        $this->assertSame([], $result['candidates']);
+    }
+
+    public function test_rejects_entity_declaration_in_prolog_without_doctype(): void
+    {
+        $result = $this->extractor->extract(
+            '<!ENTITY foo SYSTEM "file:///etc/passwd">'.
+            '<rss version="2.0"><channel/></rss>',
+            self::SOURCE_ID,
+            'rss',
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('entity_not_allowed', $result['error_code']);
+    }
+
+    public function test_rejects_malformed_dtd_prolog_before_rss(): void
+    {
+        $result = $this->extractor->extract(
+            '<!DOCTYPE rss [<!ENTITY xxe SYSTEM "file:///etc/passwd"'.
+            '<rss version="2.0"><channel><item><title>bypass</title></item></channel></rss>',
+            self::SOURCE_ID,
+            'rss',
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('doctype_not_allowed', $result['error_code']);
+    }
+
+    public function test_accepts_utf8_bom_with_xml_declaration_and_rss(): void
+    {
+        $result = $this->extractor->extract(
+            "\xEF\xBB\xBF".'<?xml version="1.0"?>'.
+            '<rss version="2.0"><channel>'.
+            '<item><title>BOM Item</title><link>https://example.com/bom</link></item>'.
+            '</channel></rss>',
+            self::SOURCE_ID,
+            'rss',
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('', $result['error_code']);
+        $this->assertCount(1, $result['candidates']);
+        $this->assertSame('BOM Item', $result['candidates'][0]->title());
+    }
+
+    public function test_rejects_oversized_and_nul_content(): void
+    {
+        $oversized = $this->extractor->extract(str_repeat('x', 2097153), self::SOURCE_ID, 'rss');
+        $nulByte = $this->extractor->extract("<rss>\0</rss>", self::SOURCE_ID, 'rss');
 
         $this->assertFalse($oversized['success']);
         $this->assertSame('body_too_large', $oversized['error_code']);
         $this->assertSame('invalid_content', $nulByte['error_code']);
-        $this->assertSame('unrecognized_content', $doctype['error_code']);
-        $this->assertSame([], $doctype['candidates']);
+    }
+
+    public function test_html_source_type_behavior_remains_unchanged(): void
+    {
+        $result = $this->extractor->extract(
+            '<!DOCTYPE html><html><body><a href="https://example.com/html-item">HTML Item</a></body></html>',
+            self::SOURCE_ID,
+            'html',
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('', $result['error_code']);
+        $this->assertCount(1, $result['candidates']);
+        $this->assertSame('HTML Item', $result['candidates'][0]->title());
+        $this->assertSame('https://example.com/html-item', $result['candidates'][0]->canonicalUrl());
+    }
+
+    public function test_asep_announcements_profile_behavior_remains_unchanged(): void
+    {
+        $result = $this->extractor->extract(
+            '<html><body><a href="https://example.com/asep">ASEP Item</a></body></html>',
+            self::SOURCE_ID,
+            'html',
+            'asep_announcements_v1',
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('', $result['error_code']);
+        $this->assertCount(1, $result['candidates']);
+        $this->assertSame('ASEP Item', $result['candidates'][0]->title());
     }
 }
