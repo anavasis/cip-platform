@@ -35,6 +35,8 @@ class SettingsWebController extends Controller
             'temperature' => $this->cfg($org->id, $project->id, 'editorial.ai.temperature') ?? config('editorial.ai.openai.temperature'),
             'max_tokens' => $this->cfg($org->id, $project->id, 'editorial.ai.max_tokens') ?? config('editorial.ai.openai.max_tokens'),
             'timeout_seconds' => $this->cfg($org->id, $project->id, 'editorial.ai.timeout_seconds') ?? config('editorial.ai.openai.timeout_seconds'),
+            'system_prompt' => (string) ($this->cfg($org->id, $project->id, 'editorial.ai.system_prompt') ?? ''),
+            'article_instructions' => (string) ($this->cfg($org->id, $project->id, 'editorial.ai.article_instructions') ?? ''),
         ];
 
         $secretConfigured = $this->secrets->list($org->id, $project->id)
@@ -65,6 +67,8 @@ class SettingsWebController extends Controller
             'temperature' => ['required', 'numeric', 'min:0', 'max:2'],
             'max_tokens' => ['required', 'integer', 'min:16', 'max:128000'],
             'timeout_seconds' => ['required', 'integer', 'min:5', 'max:300'],
+            'system_prompt' => ['nullable', 'string', 'max:12000'],
+            'article_instructions' => ['nullable', 'string', 'max:24000'],
             'api_key' => ['nullable', 'string', 'max:4096'],
         ]);
 
@@ -73,6 +77,8 @@ class SettingsWebController extends Controller
             'editorial.ai.temperature' => $validated['temperature'],
             'editorial.ai.max_tokens' => $validated['max_tokens'],
             'editorial.ai.timeout_seconds' => $validated['timeout_seconds'],
+            'editorial.ai.system_prompt' => $validated['system_prompt'] ?? '',
+            'editorial.ai.article_instructions' => $validated['article_instructions'] ?? '',
         ] as $key => $value) {
             $this->configuration->set($org->id, $key, ['value' => $value], $project->id, $user);
         }
