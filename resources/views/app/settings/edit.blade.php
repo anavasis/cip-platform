@@ -13,6 +13,9 @@
 <div><label class="cip-label">Temperature</label><input class="cip-input" type="number" step="0.1" name="temperature" value="{{ $ai['temperature'] }}" required></div>
 <div><label class="cip-label">Max tokens</label><input class="cip-input" type="number" name="max_tokens" value="{{ $ai['max_tokens'] }}" required></div>
 <div><label class="cip-label">Timeout (seconds)</label><input class="cip-input" type="number" name="timeout_seconds" value="{{ $ai['timeout_seconds'] }}" required></div>
+<p class="text-sm text-slate-600">Editorial instructions are project-specific. Different projects can use different language, tone and article rules.</p>
+<div><label class="cip-label">System prompt</label><textarea class="cip-input min-h-32" name="system_prompt" rows="6">{{ $ai['system_prompt'] }}</textarea></div>
+<div><label class="cip-label">Article instructions</label><textarea class="cip-input min-h-32" name="article_instructions" rows="8">{{ $ai['article_instructions'] }}</textarea></div>
 <div><label class="cip-label">OpenAI API key (leave blank to keep)</label><input class="cip-input" type="password" name="api_key" autocomplete="new-password"></div>
 <button class="cip-btn" type="submit">Save AI settings</button>
 </form>
