@@ -9,9 +9,13 @@ final class AnnouncementItemExtractor
 {
     private const MAX_BODY_BYTES = 2097152;
 
+    private const MAX_BODY_FIELD_CHARS = 65536;
+
     private const MAX_ITEM_NODES = 5000;
 
     private const ATOM_NAMESPACE = 'http://www.w3.org/2005/Atom';
+
+    private const CONTENT_NAMESPACE = 'http://purl.org/rss/1.0/modules/content/';
 
     /**
      * @return array{success: bool, error_code: string, candidates: array<int, AnnouncementCandidate>}
@@ -134,20 +138,24 @@ final class AnnouncementItemExtractor
                 continue;
             }
 
+            $rawPayload = [
+                'schema_version' => 1,
+                'intake_method' => 'editorial_spine_rss',
+                'title' => $title,
+                'link' => $link,
+                'guid' => $guid,
+                'pubDate' => $date,
+            ];
+            $this->appendBodyField($rawPayload, 'description', $this->readFirstChildText($item, 'description'));
+            $this->appendBodyField($rawPayload, 'content', $this->readRssContentEncoded($item));
+
             $candidates[] = new AnnouncementCandidate([
                 'source_id' => $sourceId,
                 'title' => $title,
                 'canonical_url' => $canonical,
                 'source_guid' => $guid,
                 'published_at_utc' => $this->normalizeDate($date),
-                'raw_payload' => [
-                    'schema_version' => 1,
-                    'intake_method' => 'editorial_spine_rss',
-                    'title' => $title,
-                    'link' => $link,
-                    'guid' => $guid,
-                    'pubDate' => $date,
-                ],
+                'raw_payload' => $rawPayload,
             ]);
         }
 
@@ -185,20 +193,24 @@ final class AnnouncementItemExtractor
                 continue;
             }
 
+            $rawPayload = [
+                'schema_version' => 1,
+                'intake_method' => 'editorial_spine_atom',
+                'title' => $title,
+                'link' => $link,
+                'id' => $guid,
+                'date' => $date,
+            ];
+            $this->appendBodyField($rawPayload, 'summary', $this->readAtomText($entry, 'summary'));
+            $this->appendBodyField($rawPayload, 'content', $this->readAtomText($entry, 'content'));
+
             $candidates[] = new AnnouncementCandidate([
                 'source_id' => $sourceId,
                 'title' => $title,
                 'canonical_url' => $canonical,
                 'source_guid' => $guid,
                 'published_at_utc' => $this->normalizeDate($date),
-                'raw_payload' => [
-                    'schema_version' => 1,
-                    'intake_method' => 'editorial_spine_atom',
-                    'title' => $title,
-                    'link' => $link,
-                    'id' => $guid,
-                    'date' => $date,
-                ],
+                'raw_payload' => $rawPayload,
             ]);
         }
 
@@ -349,6 +361,50 @@ final class AnnouncementItemExtractor
         }
 
         return '';
+    }
+
+    private function readRssContentEncoded(\DOMElement $item): string
+    {
+        $nodes = $item->getElementsByTagNameNS(self::CONTENT_NAMESPACE, 'encoded');
+
+        if ($nodes->length === 0) {
+            return '';
+        }
+
+        $node = $nodes->item(0);
+
+        return $node instanceof \DOMNode ? trim($node->textContent) : '';
+    }
+
+    /**
+     * @param  array<string, mixed>  $rawPayload
+     */
+    private function appendBodyField(array &$rawPayload, string $key, string $value): void
+    {
+        $bounded = $this->boundBodyField($value);
+
+        if ($bounded !== '') {
+            $rawPayload[$key] = $bounded;
+        }
+    }
+
+    private function boundBodyField(string $value): string
+    {
+        $trimmed = trim($value);
+
+        if ($trimmed === '') {
+            return '';
+        }
+
+        if (function_exists('mb_substr')) {
+            return mb_substr($trimmed, 0, self::MAX_BODY_FIELD_CHARS, 'UTF-8');
+        }
+
+        if (strlen($trimmed) <= self::MAX_BODY_FIELD_CHARS) {
+            return $trimmed;
+        }
+
+        return substr($trimmed, 0, self::MAX_BODY_FIELD_CHARS);
     }
 
     private function readRssItemLink(\DOMElement $item): string
