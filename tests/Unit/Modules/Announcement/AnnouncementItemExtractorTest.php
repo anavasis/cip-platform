@@ -84,6 +84,98 @@ class AnnouncementItemExtractorTest extends TestCase
         $this->assertCount(1, $result['candidates']);
         $this->assertSame('Post', $result['candidates'][0]->title());
         $this->assertSame('https://studymentor.gr/post/', $result['candidates'][0]->canonicalUrl());
+        $payload = $result['candidates'][0]->rawPayload();
+        $this->assertArrayHasKey('content', $payload);
+        $this->assertStringContainsString('<p>Content</p>', $payload['content']);
+        $this->assertArrayNotHasKey('description', $payload);
+    }
+
+    public function test_retains_rss_description_in_raw_payload(): void
+    {
+        $result = $this->extractor->extract(
+            '<?xml version="1.0"?><rss version="2.0"><channel>'.
+            '<item><title>RSS Item</title><link>https://example.com/rss</link>'.
+            '<description>Short RSS description body.</description></item></channel></rss>',
+            self::SOURCE_ID,
+            'rss',
+        );
+
+        $this->assertTrue($result['success']);
+        $payload = $result['candidates'][0]->rawPayload();
+        $this->assertSame('Short RSS description body.', $payload['description']);
+        $this->assertArrayNotHasKey('content', $payload);
+    }
+
+    public function test_retains_rss_description_and_content_encoded_independently(): void
+    {
+        $result = $this->extractor->extract(
+            '<?xml version="1.0"?>'.
+            '<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">'.
+            '<channel><item><title>Both Fields</title><link>https://example.com/both</link>'.
+            '<description>Excerpt text</description>'.
+            '<content:encoded><![CDATA[<p>Full article body</p>]]></content:encoded>'.
+            '</item></channel></rss>',
+            self::SOURCE_ID,
+            'rss',
+        );
+
+        $this->assertTrue($result['success']);
+        $payload = $result['candidates'][0]->rawPayload();
+        $this->assertSame('Excerpt text', $payload['description']);
+        $this->assertSame('<p>Full article body</p>', $payload['content']);
+    }
+
+    public function test_retains_atom_summary_in_raw_payload(): void
+    {
+        $result = $this->extractor->extract(
+            '<?xml version="1.0"?>'.
+            '<feed xmlns="http://www.w3.org/2005/Atom">'.
+            '<entry><title>Atom Summary</title><link href="https://example.com/atom-summary"/>'.
+            '<id>atom-summary</id><updated>2024-01-01T00:00:00Z</updated>'.
+            '<summary>Atom summary text.</summary></entry></feed>',
+            self::SOURCE_ID,
+            'atom',
+        );
+
+        $this->assertTrue($result['success']);
+        $payload = $result['candidates'][0]->rawPayload();
+        $this->assertSame('Atom summary text.', $payload['summary']);
+        $this->assertArrayNotHasKey('content', $payload);
+    }
+
+    public function test_retains_atom_content_in_raw_payload(): void
+    {
+        $result = $this->extractor->extract(
+            '<?xml version="1.0"?>'.
+            '<feed xmlns="http://www.w3.org/2005/Atom">'.
+            '<entry><title>Atom Content</title><link href="https://example.com/atom-content"/>'.
+            '<id>atom-content</id><updated>2024-01-01T00:00:00Z</updated>'.
+            '<content type="html">&lt;p&gt;Atom full body&lt;/p&gt;</content></entry></feed>',
+            self::SOURCE_ID,
+            'atom',
+        );
+
+        $this->assertTrue($result['success']);
+        $payload = $result['candidates'][0]->rawPayload();
+        $this->assertSame('<p>Atom full body</p>', $payload['content']);
+    }
+
+    public function test_body_field_size_bound_is_utf8_safe(): void
+    {
+        $greekChar = 'Ω';
+        $overLimitField = str_repeat($greekChar, 70000);
+        $result = $this->extractor->extract(
+            '<?xml version="1.0"?><rss version="2.0"><channel>'.
+            '<item><title>Bounded</title><link>https://example.com/bound</link>'.
+            '<description>'.$overLimitField.'</description></item></channel></rss>',
+            self::SOURCE_ID,
+            'rss',
+        );
+
+        $this->assertTrue($result['success']);
+        $stored = $result['candidates'][0]->rawPayload()['description'];
+        $this->assertSame(65536, mb_strlen($stored, 'UTF-8'));
+        $this->assertSame(str_repeat($greekChar, 65536), $stored);
     }
 
     public function test_accepts_literal_entity_declaration_inside_cdata(): void
@@ -102,6 +194,10 @@ class AnnouncementItemExtractorTest extends TestCase
         $this->assertNotSame('entity_not_allowed', $result['error_code']);
         $this->assertCount(1, $result['candidates']);
         $this->assertSame('Entity text', $result['candidates'][0]->title());
+        $this->assertSame(
+            'See <!ENTITY example "text"> in docs',
+            $result['candidates'][0]->rawPayload()['description'],
+        );
     }
 
     public function test_rejects_external_system_doctype_before_rss(): void

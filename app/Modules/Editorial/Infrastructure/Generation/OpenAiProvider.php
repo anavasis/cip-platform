@@ -22,6 +22,8 @@ final class OpenAiProvider implements AiProviderInterface
 {
     public const PROVIDER_CODE = 'openai';
 
+    private const SOURCE_BODY_MAX_CHARS = 2000;
+
     public function __construct(
         private readonly SecretService $secrets,
         private readonly ConfigurationService $configuration,
@@ -276,11 +278,8 @@ final class OpenAiProvider implements AiProviderInterface
      */
     private function buildSourceReferenceLines(Announcement $announcement, GenerationRequest $request): array
     {
-        $payload = $announcement->raw_payload;
-        $summary = '';
-        if (is_array($payload)) {
-            $summary = (string) ($payload['summary'] ?? $payload['description'] ?? $payload['content'] ?? '');
-        }
+        $payload = is_array($announcement->raw_payload) ? $announcement->raw_payload : [];
+        $sourceBody = $this->extractSourceBodyForPrompt($payload);
 
         $lines = [
             'Announcement ID: '.$announcement->id,
@@ -290,11 +289,55 @@ final class OpenAiProvider implements AiProviderInterface
             'Request: '.$request->requestId(),
             'Package: '.$request->packageId(),
         ];
-        if ($summary !== '') {
-            $lines[] = 'Source summary: '.$summary;
+        if ($sourceBody !== '') {
+            $lines[] = 'Source summary: '.$sourceBody;
         }
 
         return $lines;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function extractSourceBodyForPrompt(array $payload): string
+    {
+        foreach (['content', 'description', 'summary'] as $key) {
+            if (! isset($payload[$key]) || ! is_scalar($payload[$key])) {
+                continue;
+            }
+
+            $value = trim((string) $payload[$key]);
+
+            if ($value !== '') {
+                return $this->sanitizeSourceBodyForPrompt($value);
+            }
+        }
+
+        return '';
+    }
+
+    private function sanitizeSourceBodyForPrompt(string $rawBody): string
+    {
+        $withoutScripts = preg_replace('/<(script|style)\b[^>]*>.*?<\/\1>/is', '', $rawBody) ?? $rawBody;
+        $text = strip_tags($withoutScripts);
+        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = str_replace(["\r\n", "\r"], "\n", $text);
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+        $text = trim($text);
+
+        if ($text === '') {
+            return '';
+        }
+
+        if (function_exists('mb_substr')) {
+            return mb_substr($text, 0, self::SOURCE_BODY_MAX_CHARS, 'UTF-8');
+        }
+
+        if (strlen($text) <= self::SOURCE_BODY_MAX_CHARS) {
+            return $text;
+        }
+
+        return substr($text, 0, self::SOURCE_BODY_MAX_CHARS);
     }
 
     /**
