@@ -108,6 +108,48 @@ class AnnouncementIdentityServiceTest extends TestCase
         );
     }
 
+    public function test_content_hash_treats_raw_html_and_entity_encoded_html_as_equivalent(): void
+    {
+        $rawHtml = $this->candidate('Same title', rawPayload: [
+            'title' => 'Same title',
+            'content' => '<p>Hello world</p>',
+        ]);
+        $entityEncoded = $this->candidate('Same title', rawPayload: [
+            'title' => 'Same title',
+            'content' => '&lt;p&gt;Hello world&lt;/p&gt;',
+        ]);
+
+        $this->assertSame(
+            $this->identity->contentHash($rawHtml),
+            $this->identity->contentHash($entityEncoded),
+        );
+    }
+
+    public function test_content_hash_ignores_script_and_style_payload_differences(): void
+    {
+        $withScript = $this->candidate('Same title', rawPayload: [
+            'title' => 'Same title',
+            'content' => '<p>Hello world</p><script>alert(1)</script>',
+        ]);
+        $withDifferentScript = $this->candidate('Same title', rawPayload: [
+            'title' => 'Same title',
+            'content' => '<p>Hello world</p><script>alert(2)</script><style>.bad{display:none}</style>',
+        ]);
+        $entityEncodedWithScript = $this->candidate('Same title', rawPayload: [
+            'title' => 'Same title',
+            'content' => '&lt;p&gt;Hello world&lt;/p&gt;&lt;script&gt;alert(99)&lt;/script&gt;',
+        ]);
+
+        $this->assertSame(
+            $this->identity->contentHash($withScript),
+            $this->identity->contentHash($withDifferentScript),
+        );
+        $this->assertSame(
+            $this->identity->contentHash($withScript),
+            $this->identity->contentHash($entityEncodedWithScript),
+        );
+    }
+
     public function test_identity_hash_is_independent_of_body_content(): void
     {
         $withoutBody = $this->candidate('Title');

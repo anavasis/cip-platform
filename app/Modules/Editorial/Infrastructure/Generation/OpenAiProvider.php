@@ -318,9 +318,9 @@ final class OpenAiProvider implements AiProviderInterface
 
     private function sanitizeSourceBodyForPrompt(string $rawBody): string
     {
-        $withoutScripts = preg_replace('/<(script|style)\b[^>]*>.*?<\/\1>/is', '', $rawBody) ?? $rawBody;
-        $text = strip_tags($withoutScripts);
-        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = html_entity_decode($rawBody, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = preg_replace('/<(script|style)\b[^>]*>.*?<\/\1>/is', '', $text) ?? $text;
+        $text = strip_tags($text);
         $text = str_replace(["\r\n", "\r"], "\n", $text);
         $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
         $text = trim($text);

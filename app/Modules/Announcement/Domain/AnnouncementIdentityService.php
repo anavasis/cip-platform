@@ -82,8 +82,9 @@ final class AnnouncementIdentityService
             return '';
         }
 
-        $text = strip_tags($body);
-        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = html_entity_decode($body, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = preg_replace('/<(script|style)\b[^>]*>.*?<\/\1>/is', '', $text) ?? $text;
+        $text = strip_tags($text);
         $text = str_replace(["\r\n", "\r"], "\n", $text);
         $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
 

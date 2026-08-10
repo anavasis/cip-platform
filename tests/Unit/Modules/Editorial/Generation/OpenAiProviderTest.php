@@ -618,6 +618,36 @@ class OpenAiProviderTest extends TestCase
         });
     }
 
+    public function test_entity_encoded_markup_is_sanitized_before_prompt_injection(): void
+    {
+        $ctx = $this->seedAnnouncementWithKey();
+        $ctx['announcement']->update([
+            'raw_payload' => [
+                'title' => 'OpenAI Announcement',
+                'content' => '&lt;p&gt;Visible text&lt;/p&gt;&lt;script&gt;alert(1)&lt;/script&gt;&lt;style&gt;.bad{display:none}&lt;/style&gt;',
+            ],
+        ]);
+
+        Http::fake([
+            'api.openai.com/*' => Http::response([
+                'id' => 'chatcmpl-encoded-markup',
+                'choices' => [['message' => ['content' => "Title: Encoded\n\nBody"]]],
+            ], 200),
+        ]);
+
+        $this->provider()->generate($this->requestFor($ctx['announcement']->id));
+
+        Http::assertSent(function (Request $request) {
+            $userContent = (string) ($request->data()['messages'][1]['content'] ?? '');
+
+            return str_contains($userContent, 'Source summary: Visible text')
+                && ! str_contains($userContent, '<p>')
+                && ! str_contains($userContent, '<script>')
+                && ! str_contains($userContent, 'alert(1)')
+                && ! str_contains($userContent, '.bad{display:none}');
+        });
+    }
+
     public function test_html_entities_are_decoded_in_source_body_prompt(): void
     {
         $ctx = $this->seedAnnouncementWithKey();
