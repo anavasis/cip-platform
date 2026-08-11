@@ -5,12 +5,16 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Modules\Announcement\Infrastructure\Persistence\Models\Announcement;
 use App\Modules\Editorial\Infrastructure\Persistence\Models\GenerationResultModel;
+use App\Modules\Intelligence\Application\ContentIntelligencePlanner;
 use App\Support\OperatorContext;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class AnnouncementWebController extends Controller
 {
+    public function __construct(
+        private readonly ContentIntelligencePlanner $contentIntelligencePlanner,
+    ) {}
     public function index(Request $request): View
     {
         $org = OperatorContext::organization();
@@ -72,11 +76,18 @@ class AnnouncementWebController extends Controller
         }
         usort($timeline, static fn ($a, $b) => strcmp((string) $a['at'], (string) $b['at']));
 
+        $contentIntelligencePlan = $this->contentIntelligencePlanner->planForAnnouncement(
+            $org->id,
+            $project->id,
+            $announcement,
+        );
+
         return view('app.announcements.show', [
             'announcement' => $announcement,
             'timeline' => $timeline,
             'generations' => $generations,
             'status' => ((int) $announcement->revision_no) > 1 ? 'revised' : 'new',
+            'contentIntelligencePlan' => $contentIntelligencePlan,
         ]);
     }
 }

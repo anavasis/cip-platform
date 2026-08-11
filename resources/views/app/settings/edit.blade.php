@@ -38,5 +38,16 @@
 </ul>
 </div>
 </form>
+<form class="cip-card space-y-3 lg:col-span-2" method="POST" action="{{ route('app.settings.content-intelligence') }}">
+@csrf
+<h2 class="text-lg font-semibold">Content Intelligence</h2>
+<p class="text-sm text-slate-600">Project-specific deterministic entity, Hub/Satellite and SEO planning rules.</p>
+<div>
+<label class="cip-label" for="profile_json">Profile JSON</label>
+<textarea class="cip-input min-h-64 font-mono text-xs" id="profile_json" name="profile_json" rows="18">{{ old('profile_json', $contentIntelligenceProfileJson) }}</textarea>
+@error('profile_json')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+</div>
+<button class="cip-btn" type="submit">Save Content Intelligence profile</button>
+</form>
 </div>
 @endsection
