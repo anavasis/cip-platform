@@ -102,6 +102,11 @@ final class ContentIntelligencePlanner
         string $projectId,
         Announcement $announcement,
     ): ContentIntelligencePlan {
+        if ((string) $announcement->organization_id !== (string) $organizationId
+            || (string) $announcement->project_id !== (string) $projectId) {
+            return $this->unresolvedPlan(['announcement_tenant_mismatch']);
+        }
+
         $profile = $this->loadProfile($organizationId, $projectId);
 
         if ($profile === null) {
@@ -493,16 +498,6 @@ final class ContentIntelligencePlanner
                 'operation' => 'update_hub',
                 'entity_id' => $parentHubEntityId,
                 'target_url' => $parentHubUrl,
-                'mode' => 'plan_only',
-            ];
-        }
-
-        if ($contentRole === 'hub' && $hubImpact === ContentIntelligencePlan::HUB_IMPACT_SELF_UPDATE) {
-            $hubTargetUrl = $canonicalTargetUrl !== '' ? $canonicalTargetUrl : null;
-            $operations[] = [
-                'operation' => 'update_hub',
-                'entity_id' => $entityId,
-                'target_url' => $hubTargetUrl,
                 'mode' => 'plan_only',
             ];
         }

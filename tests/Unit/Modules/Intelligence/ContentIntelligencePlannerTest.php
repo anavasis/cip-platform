@@ -276,6 +276,102 @@ class ContentIntelligencePlannerTest extends TestCase
         $this->assertSame('asep-6k-2026', $planA->entityId());
     }
 
+    public function test_mismatched_project_announcement_fails_closed(): void
+    {
+        $ctxA = $this->seedProfile($this->satelliteProfile(), 'Mismatch Org A', 'Mismatch Project A');
+        $ctxB = $this->seedProfile([
+            'version' => 1,
+            'publishing_mode' => 'plan_only',
+            'entity_rules' => [],
+        ], 'Mismatch Org B', 'Mismatch Project B');
+
+        $announcementB = $this->makeAnnouncement('ΑΣΕΠ 6Κ/2026', $ctxB['organization']->id, $ctxB['project']->id);
+
+        $plan = $this->planner->planForAnnouncement(
+            $ctxA['organization']->id,
+            $ctxA['project']->id,
+            $announcementB,
+        );
+
+        $this->assertSame(ContentIntelligencePlan::STATUS_UNRESOLVED, $plan->status());
+        $this->assertSame(ContentIntelligencePlan::ACTION_NO_PUBLISH, $plan->action());
+        $this->assertSame(ContentIntelligencePlan::HUB_IMPACT_NONE, $plan->hubImpact());
+        $this->assertSame([], $plan->publishingOperations());
+        $this->assertContains('announcement_tenant_mismatch', $plan->warnings());
+    }
+
+    public function test_mismatched_organization_announcement_fails_closed(): void
+    {
+        $ctxA = $this->seedProfile($this->satelliteProfile(), 'Tenant Org A', 'Tenant Project A');
+        $userB = User::factory()->create(['password' => Hash::make('password-secret')]);
+        $organizationB = app(OrganizationService::class)->create($userB, 'Tenant Org B');
+        $projectB = app(ProjectService::class)->create($organizationB, $userB, 'Tenant Project B');
+
+        $announcementB = $this->makeAnnouncement('ΑΣΕΠ 6Κ/2026', $organizationB->id, $projectB->id);
+
+        $plan = $this->planner->planForAnnouncement(
+            $ctxA['organization']->id,
+            $ctxA['project']->id,
+            $announcementB,
+        );
+
+        $this->assertSame(ContentIntelligencePlan::STATUS_UNRESOLVED, $plan->status());
+        $this->assertSame(ContentIntelligencePlan::ACTION_NO_PUBLISH, $plan->action());
+        $this->assertSame(ContentIntelligencePlan::HUB_IMPACT_NONE, $plan->hubImpact());
+        $this->assertSame([], $plan->publishingOperations());
+        $this->assertContains('announcement_tenant_mismatch', $plan->warnings());
+    }
+
+    public function test_hub_update_existing_emits_single_operation(): void
+    {
+        $ctx = $this->seedProfile($this->hubProfile(withCanonicalTarget: true));
+        $announcement = $this->makeAnnouncement('ΑΣΕΠ 2026 hub', $ctx['organization']->id, $ctx['project']->id);
+
+        $plan = $this->planner->planForAnnouncement($ctx['organization']->id, $ctx['project']->id, $announcement);
+
+        $this->assertSame(ContentIntelligencePlan::HUB_IMPACT_SELF_UPDATE, $plan->hubImpact());
+        $this->assertCount(1, $plan->publishingOperations());
+        $this->assertSame('update_existing', $plan->publishingOperations()[0]['operation']);
+        $this->assertSame('asep-2026', $plan->publishingOperations()[0]['entity_id']);
+        $this->assertSame('https://example.test/asep-2026-hub', $plan->publishingOperations()[0]['target_url']);
+        $this->assertSame('plan_only', $plan->publishingOperations()[0]['mode']);
+        $this->assertFalse($this->hasOperation($plan->publishingOperations(), 'update_hub'));
+    }
+
+    public function test_hub_create_new_emits_single_operation(): void
+    {
+        $ctx = $this->seedProfile($this->hubProfile(withCanonicalTarget: false));
+        $announcement = $this->makeAnnouncement('ΑΣΕΠ 2026 hub', $ctx['organization']->id, $ctx['project']->id);
+
+        $plan = $this->planner->planForAnnouncement($ctx['organization']->id, $ctx['project']->id, $announcement);
+
+        $this->assertSame(ContentIntelligencePlan::HUB_IMPACT_SELF_UPDATE, $plan->hubImpact());
+        $this->assertCount(1, $plan->publishingOperations());
+        $this->assertSame('create_new', $plan->publishingOperations()[0]['operation']);
+        $this->assertSame('asep-2026', $plan->publishingOperations()[0]['entity_id']);
+        $this->assertNull($plan->publishingOperations()[0]['target_url']);
+        $this->assertSame('plan_only', $plan->publishingOperations()[0]['mode']);
+        $this->assertFalse($this->hasOperation($plan->publishingOperations(), 'update_hub'));
+    }
+
+    public function test_satellite_still_emits_satellite_and_parent_hub_operations(): void
+    {
+        $ctx = $this->seedProfile($this->satelliteProfile());
+        $announcement = $this->makeAnnouncement('ΑΣΕΠ 6Κ/2026', $ctx['organization']->id, $ctx['project']->id);
+
+        $plan = $this->planner->planForAnnouncement($ctx['organization']->id, $ctx['project']->id, $announcement);
+
+        $this->assertCount(2, $plan->publishingOperations());
+        $this->assertSame('update_existing', $plan->publishingOperations()[0]['operation']);
+        $this->assertSame('asep-6k-2026', $plan->publishingOperations()[0]['entity_id']);
+        $this->assertSame('update_hub', $plan->publishingOperations()[1]['operation']);
+        $this->assertSame('asep-2026', $plan->publishingOperations()[1]['entity_id']);
+        $this->assertNotSame(
+            $plan->publishingOperations()[0]['entity_id'],
+            $plan->publishingOperations()[1]['entity_id'],
+        );
+    }
+
     public function test_publishing_operations_always_plan_only_mode(): void
     {
         $ctx = $this->seedProfile($this->satelliteProfile());
@@ -341,6 +437,51 @@ class ContentIntelligencePlannerTest extends TestCase
             'first_seen_at' => now(),
             'last_seen_at' => now(),
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function hubProfile(bool $withCanonicalTarget): array
+    {
+        $rule = [
+            'entity_id' => 'asep-2026',
+            'label' => 'ΑΣΕΠ 2026',
+            'patterns' => ['ΑΣΕΠ\\s+2026'],
+            'match_scope' => 'title',
+            'content_role' => 'hub',
+            'seo' => [
+                'search_intent' => 'ASEP 2026 hub overview',
+                'slug' => 'asep-2026',
+                'seo_title_template' => '{announcement_title}',
+                'h1_template' => '{announcement_title}',
+                'meta_description_template' => 'ASEP 2026 hub meta.',
+            ],
+        ];
+
+        if ($withCanonicalTarget) {
+            $rule['canonical_target_url'] = 'https://example.test/asep-2026-hub';
+        }
+
+        return [
+            'version' => 1,
+            'publishing_mode' => 'plan_only',
+            'entity_rules' => [$rule],
+        ];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $operations
+     */
+    private function hasOperation(array $operations, string $operationName): bool
+    {
+        foreach ($operations as $operation) {
+            if (($operation['operation'] ?? '') === $operationName) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
