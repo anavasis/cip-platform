@@ -118,6 +118,7 @@ Route::middleware('auth')->group(function (): void {
             Route::get('/settings', [SettingsWebController::class, 'edit'])->name('settings.edit');
             Route::post('/settings/ai', [SettingsWebController::class, 'updateAi'])->name('settings.ai');
             Route::post('/settings/flags', [SettingsWebController::class, 'updateFlags'])->name('settings.flags');
+            Route::post('/settings/content-intelligence', [SettingsWebController::class, 'updateContentIntelligence'])->name('settings.content-intelligence');
         });
     });
 });

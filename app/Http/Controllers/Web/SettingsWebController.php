@@ -10,6 +10,7 @@ use App\Domain\Shared\Enums\FeatureFlagScope;
 use App\Http\Controllers\Controller;
 use App\Modules\Acquisition\Application\CapabilityGate as AcquisitionCapabilityGate;
 use App\Modules\Editorial\Application\CapabilityGate;
+use App\Modules\Intelligence\Application\ContentIntelligencePlanner;
 use App\Support\OperatorContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -42,9 +43,23 @@ class SettingsWebController extends Controller
         $secretConfigured = $this->secrets->list($org->id, $project->id)
             ->contains(fn ($s) => $s->key === config('editorial.ai.openai.secret_key'));
 
+        $profileEntry = $this->configuration->get($org->id, ContentIntelligencePlanner::PROFILE_KEY, $project->id);
+        $profileJson = '';
+        if ($profileEntry !== null) {
+            $profileValue = $profileEntry->value;
+            if (is_array($profileValue) && isset($profileValue['value']) && is_array($profileValue['value'])) {
+                $profileValue = $profileValue['value'];
+            }
+            if (is_array($profileValue)) {
+                $encoded = json_encode($profileValue, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                $profileJson = is_string($encoded) ? $encoded : '';
+            }
+        }
+
         return view('app.settings.edit', [
             'ai' => $ai,
             'secretConfigured' => $secretConfigured,
+            'contentIntelligenceProfileJson' => $profileJson,
             'flags' => [
                 CapabilityGate::EDITORIAL => $this->flags->isEnabled(CapabilityGate::EDITORIAL, $org->id, $project->id),
                 CapabilityGate::EDITORIAL_GENERATION => $this->flags->isEnabled(CapabilityGate::EDITORIAL_GENERATION, $org->id, $project->id),
@@ -112,6 +127,41 @@ class SettingsWebController extends Controller
         }
 
         return back()->with('status', 'Feature flags updated.');
+    }
+
+    public function updateContentIntelligence(Request $request, ContentIntelligencePlanner $planner): RedirectResponse
+    {
+        $org = OperatorContext::organization();
+        $project = OperatorContext::project();
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'profile_json' => ['required', 'string', 'max:65536'],
+        ]);
+
+        $decoded = json_decode($validated['profile_json'], true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return back()
+                ->withInput()
+                ->withErrors(['profile_json' => 'Profile must be valid JSON.']);
+        }
+
+        $validation = $planner->validateProfile($decoded);
+        if (! $validation['valid']) {
+            return back()
+                ->withInput()
+                ->withErrors(['profile_json' => implode(' ', $validation['errors'])]);
+        }
+
+        $this->configuration->set(
+            $org->id,
+            ContentIntelligencePlanner::PROFILE_KEY,
+            ['value' => $validation['profile']],
+            $project->id,
+            $user,
+        );
+
+        return back()->with('status', 'Content Intelligence profile saved.');
     }
 
     private function cfg(string $orgId, string $projectId, string $key): mixed
