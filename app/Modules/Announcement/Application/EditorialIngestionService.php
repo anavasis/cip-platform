@@ -10,6 +10,8 @@ use App\Modules\Announcement\Domain\Contracts\CollectorRegistryInterface;
 use App\Modules\Announcement\Domain\Contracts\IngestionDiagnosticsInterface;
 use App\Modules\Announcement\Domain\Contracts\ParserRegistryInterface;
 use App\Modules\Announcement\Domain\LifecycleBatchResult;
+use App\Modules\Announcement\Infrastructure\Persistence\Models\Announcement;
+use App\Modules\Intelligence\Application\EntityBindingService;
 
 /**
  * Editorial spine facade: acquire, extract, then apply lifecycle decisions.
@@ -30,6 +32,7 @@ final class EditorialIngestionService
         private readonly CollectorRegistryInterface $collectorRegistry,
         private readonly ParserRegistryInterface $parserRegistry,
         private readonly IngestionDiagnosticsInterface $diagnostics,
+        private readonly EntityBindingService $entityBindingService,
     ) {}
 
     public function forTenant(string $organizationId, string $projectId): self
@@ -96,6 +99,7 @@ final class EditorialIngestionService
             : [];
         $result = $this->lifecycleService->apply($candidates);
         $this->lastResult = $result;
+        $this->bindEntitiesFromBatch($result);
         $this->recordIngestionDiagnostics($result);
 
         return $result;
@@ -110,6 +114,7 @@ final class EditorialIngestionService
     {
         $result = $this->lifecycleService->apply($candidates);
         $this->lastResult = $result;
+        $this->bindEntitiesFromBatch($result);
         $this->recordIngestionDiagnostics($result);
 
         return $result;
@@ -185,6 +190,32 @@ final class EditorialIngestionService
         $this->recordIngestionDiagnostics($result);
 
         return $result;
+    }
+
+    private function bindEntitiesFromBatch(LifecycleBatchResult $result): void
+    {
+        if ($result->success() !== true) {
+            return;
+        }
+
+        foreach ($result->decisions() as $decision) {
+            $itemId = trim($decision->itemId());
+            if ($itemId === '') {
+                continue;
+            }
+
+            $announcement = Announcement::query()->find($itemId);
+            if ($announcement === null) {
+                continue;
+            }
+
+            if ((string) $announcement->organization_id !== $this->organizationId
+                || (string) $announcement->project_id !== $this->projectId) {
+                continue;
+            }
+
+            $this->entityBindingService->bindAnnouncement($announcement);
+        }
     }
 
     private function recordIngestionDiagnostics(LifecycleBatchResult $result): void
