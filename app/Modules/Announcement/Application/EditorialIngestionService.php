@@ -18,11 +18,16 @@ use App\Modules\Intelligence\Application\EntityBindingService;
  */
 final class EditorialIngestionService
 {
+    private const ENTITY_BINDING_FAILURE_MESSAGE_MAX = 500;
+
     private ?LifecycleBatchResult $lastResult = null;
 
     private string $organizationId = '';
 
     private string $projectId = '';
+
+    /** @var array<int, array{announcement_id: string, exception: string, message: string}> */
+    private array $entityBindingFailures = [];
 
     public function __construct(
         private readonly SourceAcquisitionService $sourceAcquisitionService,
@@ -46,6 +51,8 @@ final class EditorialIngestionService
 
     public function ingestFromSource(string $sourceId): LifecycleBatchResult
     {
+        $this->resetEntityBindingFailureState();
+
         $id = trim($sourceId);
 
         if ($id === '') {
@@ -112,6 +119,8 @@ final class EditorialIngestionService
      */
     public function ingestCandidates(array $candidates): LifecycleBatchResult
     {
+        $this->resetEntityBindingFailureState();
+
         $result = $this->lifecycleService->apply($candidates);
         $this->lastResult = $result;
         $this->bindEntitiesFromBatch($result);
@@ -214,13 +223,41 @@ final class EditorialIngestionService
                 continue;
             }
 
-            $this->entityBindingService->bindAnnouncement($announcement);
+            try {
+                $this->entityBindingService->bindAnnouncement($announcement);
+            } catch (\Throwable $throwable) {
+                $this->entityBindingFailures[] = [
+                    'announcement_id' => $itemId,
+                    'exception' => $throwable::class,
+                    'message' => $this->truncateBindingFailureMessage($throwable->getMessage()),
+                ];
+            }
         }
+    }
+
+    private function resetEntityBindingFailureState(): void
+    {
+        $this->entityBindingFailures = [];
+    }
+
+    private function truncateBindingFailureMessage(string $message): string
+    {
+        $message = trim($message);
+
+        if ($message === '') {
+            return '';
+        }
+
+        if (mb_strlen($message) <= self::ENTITY_BINDING_FAILURE_MESSAGE_MAX) {
+            return $message;
+        }
+
+        return mb_substr($message, 0, self::ENTITY_BINDING_FAILURE_MESSAGE_MAX);
     }
 
     private function recordIngestionDiagnostics(LifecycleBatchResult $result): void
     {
-        $this->diagnostics->record([
+        $record = [
             'organization_id' => $this->organizationId,
             'project_id' => $this->projectId,
             'at' => gmdate('Y-m-d H:i:s'),
@@ -232,6 +269,13 @@ final class EditorialIngestionService
             'updated_count' => $result->updatedCount(),
             'unchanged_count' => $result->unchangedCount(),
             'duplicate_count' => $result->duplicateCount(),
-        ]);
+            'entity_binding_failure_count' => count($this->entityBindingFailures),
+        ];
+
+        if ($this->entityBindingFailures !== []) {
+            $record['entity_binding_failures'] = $this->entityBindingFailures;
+        }
+
+        $this->diagnostics->record($record);
     }
 }
