@@ -28,6 +28,7 @@ use App\Modules\Announcement\Http\Controllers\IngestionController;
 use App\Modules\Editorial\Http\Controllers\EditorialArtifactController;
 use App\Modules\Editorial\Http\Controllers\EditorialDiagnosticsController;
 use App\Modules\Editorial\Http\Controllers\EditorialGenerationController;
+use App\Modules\Intelligence\Http\Controllers\HubController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')
@@ -234,6 +235,9 @@ Route::prefix('v1')
                                 ->middleware(EnforcePermission::class.':editorial.view');
                             Route::get('editorial/diagnostics', [EditorialDiagnosticsController::class, 'show'])
                                 ->middleware(EnforcePermission::class.':editorial.diagnostics');
+
+                            Route::get('hub', [HubController::class, 'show'])
+                                ->middleware(EnforcePermission::class.':hub.view');
                         });
                 });
         });

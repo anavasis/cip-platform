@@ -36,6 +36,7 @@ class PermissionSeeder extends Seeder
             'editorial.generate' => 'Generate editorial article previews',
             'editorial.regenerate' => 'Regenerate editorial article previews',
             'editorial.diagnostics' => 'View editorial diagnostics',
+            'hub.view' => 'View Hub payload',
         ];
 
         foreach ($permissions as $name => $description) {
@@ -57,6 +58,7 @@ class PermissionSeeder extends Seeder
                 'announcements.view',
                 'acquisition.view', 'acquisition.run', 'acquisition.diagnostics',
                 'editorial.view', 'editorial.generate', 'editorial.regenerate', 'editorial.diagnostics',
+                'hub.view',
             ],
             'member' => [
                 'organizations.view', 'projects.view',
@@ -86,6 +88,7 @@ class PermissionSeeder extends Seeder
                 'announcements.view',
                 'acquisition.view', 'acquisition.run', 'acquisition.diagnostics',
                 'editorial.view', 'editorial.generate', 'editorial.regenerate', 'editorial.diagnostics',
+                'hub.view',
             ],
             'editor' => [
                 'projects.view', 'config.manage',
