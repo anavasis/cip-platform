@@ -85,6 +85,70 @@ class EntityBindingServiceTest extends TestCase
         ]);
     }
 
+    public function test_body_only_match_does_not_persist_entity_or_bindings(): void
+    {
+        $profile = $this->satelliteProfile();
+        $profile['entity_rules'][0]['match_scope'] = 'title_and_body';
+        $ctx = $this->seedProfile($profile);
+        $announcement = $this->makeAnnouncement(
+            'ΑΣΕΠ 2026: Hub overview',
+            $ctx,
+            'https://example.test/hub-body-only',
+            ['description' => 'Mentions ΑΣΕΠ 6Κ/2026 in the body only.'],
+        );
+
+        $result = $this->service->bindAnnouncement($announcement);
+
+        $this->assertFalse($result['bound']);
+        $this->assertSame('primary_binding_ineligible', $result['reason']);
+        $this->assertSame('entity-a-2026', $result['entity_id']);
+        $this->assertNull($result['content_entity_id']);
+        $this->assertSame(0, ContentEntityModel::query()->count());
+        $this->assertSame(0, EntityAnnouncementBindingModel::query()->count());
+        $this->assertSame(0, RemotePostBindingModel::query()->count());
+    }
+
+    public function test_genuine_title_match_persists_entity_and_binding(): void
+    {
+        $profile = $this->satelliteProfile();
+        $profile['entity_rules'][0]['match_scope'] = 'title_and_body';
+        $ctx = $this->seedProfile($profile);
+        $announcement = $this->makeAnnouncement(
+            'ΑΣΕΠ 6Κ/2026: Ανοιχτές αιτήσεις για 315 μόνιμες θέσεις ΠΕ και ΤΕ',
+            $ctx,
+            'https://example.test/genuine-6k',
+            ['description' => 'Supporting details'],
+        );
+
+        $result = $this->service->bindAnnouncement($announcement);
+
+        $this->assertTrue($result['bound']);
+        $this->assertSame(1, ContentEntityModel::query()->count());
+        $this->assertSame(1, EntityAnnouncementBindingModel::query()->count());
+        $this->assertDatabaseHas('entity_announcement_bindings', [
+            'announcement_id' => $announcement->id,
+        ]);
+    }
+
+    public function test_allow_body_primary_match_opt_in_persists_binding(): void
+    {
+        $profile = $this->satelliteProfile();
+        $profile['entity_rules'][0]['match_scope'] = 'title_and_body';
+        $profile['entity_rules'][0]['allow_body_primary_match'] = true;
+        $ctx = $this->seedProfile($profile);
+        $announcement = $this->makeAnnouncement(
+            'Unrelated hub title',
+            $ctx,
+            'https://example.test/body-primary-opt-in',
+            ['description' => 'Mentions ΑΣΕΠ 6Κ/2026 in the body.'],
+        );
+
+        $result = $this->service->bindAnnouncement($announcement);
+
+        $this->assertTrue($result['bound']);
+        $this->assertSame(1, EntityAnnouncementBindingModel::query()->count());
+    }
+
     public function test_two_announcements_same_entity_create_one_entity_and_two_bindings(): void
     {
         $ctx = $this->seedProfile($this->satelliteProfile());
@@ -402,9 +466,14 @@ class EntityBindingServiceTest extends TestCase
 
     /**
      * @param  array{organization: mixed, project: mixed, source: Source}  $ctx
+     * @param  array<string, mixed>  $rawPayload
      */
-    private function makeAnnouncement(string $title, array $ctx, ?string $url = null): Announcement
-    {
+    private function makeAnnouncement(
+        string $title,
+        array $ctx,
+        ?string $url = null,
+        array $rawPayload = [],
+    ): Announcement {
         $url = $url ?? ('https://example.test/item/'.uniqid('', true));
 
         return Announcement::create([
@@ -416,7 +485,7 @@ class EntityBindingServiceTest extends TestCase
             'canonical_url' => $url,
             'raw_title' => $title,
             'content_hash' => hash('sha256', $title.'|'.$url),
-            'raw_payload' => ['title' => $title],
+            'raw_payload' => $rawPayload !== [] ? $rawPayload : ['title' => $title],
             'revision_no' => 1,
             'first_seen_at' => now(),
             'last_seen_at' => now(),

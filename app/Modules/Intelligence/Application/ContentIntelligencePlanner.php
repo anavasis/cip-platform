@@ -88,6 +88,11 @@ final class ContentIntelligencePlanner
             if (isset($rule['content_role']) && ! in_array((string) $rule['content_role'], self::ALLOWED_CONTENT_ROLES, true)) {
                 $errors[] = "entity_rules[$index].content_role must be hub or satellite.";
             }
+
+            if (array_key_exists('allow_body_primary_match', $rule)
+                && ! is_bool($rule['allow_body_primary_match'])) {
+                $errors[] = "entity_rules[$index].allow_body_primary_match must be boolean.";
+            }
         }
 
         if ($errors !== []) {
@@ -129,7 +134,8 @@ final class ContentIntelligencePlanner
         $title = trim((string) $announcement->raw_title);
         $body = $this->extractSourceBody(is_array($announcement->raw_payload) ? $announcement->raw_payload : []);
 
-        $matches = [];
+        $titleMatches = [];
+        $bodyOnlyMatches = [];
         $invalidPatterns = [];
 
         foreach ($validatedProfile['entity_rules'] as $rule) {
@@ -142,37 +148,18 @@ final class ContentIntelligencePlanner
                 continue;
             }
 
-            $matchScope = isset($rule['match_scope']) ? (string) $rule['match_scope'] : 'title';
-            $haystack = $matchScope === 'title_and_body'
-                ? trim($title."\n".$body)
-                : $title;
-
-            if ($haystack === '') {
+            $ruleMatch = $this->matchRule($rule, $title, $body, $invalidPatterns);
+            if ($ruleMatch === null) {
                 continue;
             }
 
-            $patterns = is_array($rule['patterns'] ?? null) ? $rule['patterns'] : [];
-            foreach ($patterns as $pattern) {
-                $pattern = (string) $pattern;
-                if ($pattern === '') {
-                    continue;
-                }
+            if ($ruleMatch['match_location'] === ContentIntelligencePlan::MATCH_LOCATION_TITLE) {
+                $titleMatches[$entityId] = $ruleMatch;
 
-                $regex = $this->compilePattern($pattern);
-                if ($regex === null) {
-                    $invalidPatterns[] = $pattern;
-
-                    continue;
-                }
-
-                if (@preg_match($regex, $haystack) === 1) {
-                    $matches[$entityId] = [
-                        'rule' => $rule,
-                        'matched_pattern' => $pattern,
-                    ];
-                    break;
-                }
+                continue;
             }
+
+            $bodyOnlyMatches[$entityId] = $ruleMatch;
         }
 
         if ($invalidPatterns !== []) {
@@ -188,11 +175,7 @@ final class ContentIntelligencePlanner
             ]);
         }
 
-        if ($matches === []) {
-            return $this->unresolvedPlan(['no_entity_rule_matched']);
-        }
-
-        if (count($matches) > 1) {
+        if (count($titleMatches) > 1) {
             return new ContentIntelligencePlan([
                 'status' => ContentIntelligencePlan::STATUS_AMBIGUOUS,
                 'confidence' => 'low',
@@ -200,25 +183,148 @@ final class ContentIntelligencePlanner
                 'hub_impact' => ContentIntelligencePlan::HUB_IMPACT_NONE,
                 'warnings' => [
                     'ambiguous_entity_resolution',
-                    'matched_entities: '.implode(', ', array_keys($matches)),
+                    'matched_entities: '.implode(', ', array_keys($titleMatches)),
                 ],
             ]);
         }
 
-        $entityId = array_key_first($matches);
-        $match = $matches[$entityId];
+        if ($titleMatches !== []) {
+            $entityId = array_key_first($titleMatches);
+            /** @var array<string, mixed> $rule */
+            $rule = $titleMatches[$entityId]['rule'];
+
+            return $this->buildResolvedPlan(
+                $rule,
+                $entityId,
+                (string) $titleMatches[$entityId]['matched_pattern'],
+                $title,
+                ContentIntelligencePlan::MATCH_LOCATION_TITLE,
+                true,
+            );
+        }
+
+        if ($bodyOnlyMatches === []) {
+            return $this->unresolvedPlan(['no_entity_rule_matched']);
+        }
+
+        if (count($bodyOnlyMatches) > 1) {
+            return new ContentIntelligencePlan([
+                'status' => ContentIntelligencePlan::STATUS_AMBIGUOUS,
+                'confidence' => 'low',
+                'action' => ContentIntelligencePlan::ACTION_NO_PUBLISH,
+                'hub_impact' => ContentIntelligencePlan::HUB_IMPACT_NONE,
+                'warnings' => [
+                    'ambiguous_entity_resolution',
+                    'matched_entities: '.implode(', ', array_keys($bodyOnlyMatches)),
+                ],
+            ]);
+        }
+
+        $entityId = array_key_first($bodyOnlyMatches);
+        $match = $bodyOnlyMatches[$entityId];
         /** @var array<string, mixed> $rule */
         $rule = $match['rule'];
 
-        return $this->buildResolvedPlan($rule, $entityId, (string) $match['matched_pattern'], $title);
+        return $this->buildResolvedPlan(
+            $rule,
+            $entityId,
+            (string) $match['matched_pattern'],
+            $title,
+            ContentIntelligencePlan::MATCH_LOCATION_BODY,
+            (bool) $match['primary_binding_eligible'],
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $rule
+     * @param  array<int, string>  $invalidPatterns
+     * @return array{
+     *     rule: array<string, mixed>,
+     *     matched_pattern: string,
+     *     match_location: string,
+     *     primary_binding_eligible: bool
+     * }|null
+     */
+    private function matchRule(array $rule, string $title, string $body, array &$invalidPatterns): ?array
+    {
+        $matchScope = isset($rule['match_scope']) ? (string) $rule['match_scope'] : 'title';
+        $allowBodyPrimaryMatch = ($rule['allow_body_primary_match'] ?? false) === true;
+        $patterns = is_array($rule['patterns'] ?? null) ? $rule['patterns'] : [];
+
+        if ($title !== '') {
+            $titlePattern = $this->firstMatchingPattern($patterns, $title, $invalidPatterns);
+            if ($titlePattern !== null) {
+                return [
+                    'rule' => $rule,
+                    'matched_pattern' => $titlePattern,
+                    'match_location' => ContentIntelligencePlan::MATCH_LOCATION_TITLE,
+                    'primary_binding_eligible' => true,
+                ];
+            }
+        }
+
+        if ($matchScope !== 'title_and_body' || $body === '') {
+            return null;
+        }
+
+        $bodyPattern = $this->firstMatchingPattern($patterns, $body, $invalidPatterns);
+
+        if ($bodyPattern === null) {
+            return null;
+        }
+
+        return [
+            'rule' => $rule,
+            'matched_pattern' => $bodyPattern,
+            'match_location' => ContentIntelligencePlan::MATCH_LOCATION_BODY,
+            'primary_binding_eligible' => $allowBodyPrimaryMatch,
+        ];
+    }
+
+    /**
+     * @param  array<int, mixed>  $patterns
+     * @param  array<int, string>  $invalidPatterns
+     */
+    private function firstMatchingPattern(array $patterns, string $haystack, array &$invalidPatterns): ?string
+    {
+        foreach ($patterns as $pattern) {
+            $pattern = (string) $pattern;
+            if ($pattern === '') {
+                continue;
+            }
+
+            $regex = $this->compilePattern($pattern);
+            if ($regex === null) {
+                $invalidPatterns[] = $pattern;
+
+                continue;
+            }
+
+            if (@preg_match($regex, $haystack) === 1) {
+                return $pattern;
+            }
+        }
+
+        return null;
     }
 
     /**
      * @param  array<string, mixed>  $rule
      */
-    private function buildResolvedPlan(array $rule, string $entityId, string $matchedPattern, string $announcementTitle): ContentIntelligencePlan
-    {
+    private function buildResolvedPlan(
+        array $rule,
+        string $entityId,
+        string $matchedPattern,
+        string $announcementTitle,
+        string $matchLocation,
+        bool $primaryBindingEligible,
+    ): ContentIntelligencePlan {
         $warnings = [];
+
+        if ($matchLocation === ContentIntelligencePlan::MATCH_LOCATION_BODY && ! $primaryBindingEligible) {
+            $warnings[] = 'body_only_match_reference_only';
+        }
+
         $entityLabel = trim((string) ($rule['label'] ?? $entityId));
         $contentRole = isset($rule['content_role']) ? (string) $rule['content_role'] : 'satellite';
 
@@ -295,6 +401,8 @@ final class ContentIntelligencePlanner
             'entity_id' => $entityId,
             'entity_label' => $entityLabel,
             'matched_pattern' => $matchedPattern,
+            'match_location' => $matchLocation,
+            'primary_binding_eligible' => $primaryBindingEligible,
             'content_role' => $contentRole,
             'action' => $action,
             'canonical_target_url' => $canonicalTargetUrl !== '' ? $canonicalTargetUrl : null,

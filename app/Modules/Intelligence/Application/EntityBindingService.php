@@ -56,6 +56,15 @@ final class EntityBindingService
             ];
         }
 
+        if ($plan->primaryBindingEligible() !== true) {
+            return [
+                'bound' => false,
+                'reason' => 'primary_binding_ineligible',
+                'entity_id' => $entityId,
+                'content_entity_id' => null,
+            ];
+        }
+
         return DB::transaction(function () use (
             $announcement,
             $plan,
