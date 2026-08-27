@@ -27,6 +27,10 @@ final class ContentIntelligencePlan
 
     public const HUB_IMPACT_SELF_UPDATE = 'self_update';
 
+    public const MATCH_LOCATION_TITLE = 'title';
+
+    public const MATCH_LOCATION_BODY = 'body';
+
     private string $status;
 
     private string $confidence;
@@ -63,6 +67,10 @@ final class ContentIntelligencePlan
     /** @var array<int, string> */
     private array $warnings;
 
+    private ?string $matchLocation;
+
+    private bool $primaryBindingEligible;
+
     /**
      * @param  array<string, mixed>  $data
      */
@@ -84,6 +92,11 @@ final class ContentIntelligencePlan
         $this->internalLinks = is_array($data['internal_links'] ?? null) ? $data['internal_links'] : [];
         $this->publishingOperations = is_array($data['publishing_operations'] ?? null) ? $data['publishing_operations'] : [];
         $this->warnings = is_array($data['warnings'] ?? null) ? array_values(array_map('strval', $data['warnings'])) : [];
+        $matchLocation = isset($data['match_location']) ? (string) $data['match_location'] : null;
+        $this->matchLocation = in_array($matchLocation, [self::MATCH_LOCATION_TITLE, self::MATCH_LOCATION_BODY], true)
+            ? $matchLocation
+            : null;
+        $this->primaryBindingEligible = ($data['primary_binding_eligible'] ?? false) === true;
     }
 
     public function status(): string
@@ -178,6 +191,16 @@ final class ContentIntelligencePlan
         return $this->warnings;
     }
 
+    public function matchLocation(): ?string
+    {
+        return $this->matchLocation;
+    }
+
+    public function primaryBindingEligible(): bool
+    {
+        return $this->primaryBindingEligible;
+    }
+
     public function isResolved(): bool
     {
         return $this->status === self::STATUS_RESOLVED;
@@ -205,6 +228,8 @@ final class ContentIntelligencePlan
             'internal_links' => $this->internalLinks,
             'publishing_operations' => $this->publishingOperations,
             'warnings' => $this->warnings,
+            'match_location' => $this->matchLocation,
+            'primary_binding_eligible' => $this->primaryBindingEligible,
         ];
     }
 }

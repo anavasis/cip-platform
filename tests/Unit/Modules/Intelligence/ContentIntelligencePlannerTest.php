@@ -252,6 +252,101 @@ class ContentIntelligencePlannerTest extends TestCase
 
         $this->assertSame(ContentIntelligencePlan::STATUS_RESOLVED, $plan->status());
         $this->assertSame('asep-6k-2026', $plan->entityId());
+        $this->assertSame(ContentIntelligencePlan::MATCH_LOCATION_BODY, $plan->matchLocation());
+        $this->assertFalse($plan->primaryBindingEligible());
+        $this->assertContains('body_only_match_reference_only', $plan->warnings());
+        $this->assertArrayHasKey('match_location', $plan->toArray());
+        $this->assertArrayHasKey('primary_binding_eligible', $plan->toArray());
+    }
+
+    public function test_genuine_satellite_title_match_is_primary_eligible(): void
+    {
+        $profile = $this->satelliteProfile();
+        $profile['entity_rules'][0]['match_scope'] = 'title_and_body';
+        $ctx = $this->seedProfile($profile);
+        $announcement = $this->makeAnnouncement(
+            'ΑΣΕΠ 6Κ/2026: Ανοιχτές αιτήσεις για 315 μόνιμες θέσεις ΠΕ και ΤΕ',
+            $ctx['organization']->id,
+            $ctx['project']->id,
+            'https://example.com/genuine-6k',
+            ['description' => 'Supporting body text'],
+        );
+
+        $plan = $this->planner->planForAnnouncement($ctx['organization']->id, $ctx['project']->id, $announcement);
+
+        $this->assertSame(ContentIntelligencePlan::STATUS_RESOLVED, $plan->status());
+        $this->assertSame('asep-6k-2026', $plan->entityId());
+        $this->assertSame(ContentIntelligencePlan::MATCH_LOCATION_TITLE, $plan->matchLocation());
+        $this->assertTrue($plan->primaryBindingEligible());
+        $this->assertNotContains('body_only_match_reference_only', $plan->warnings());
+    }
+
+    public function test_hub_overview_body_mention_does_not_resolve_satellite_when_title_matches_hub(): void
+    {
+        $profile = $this->hubAndSatelliteProfile();
+        $profile['entity_rules'][1]['match_scope'] = 'title_and_body';
+        $ctx = $this->seedProfile($profile);
+        $announcement = $this->makeAnnouncement(
+            'ΑΣΕΠ 2026: Πάνω από 11.000 θέσεις και διορισμοί – Προκηρύξεις και υποστήριξη αιτήσεων',
+            $ctx['organization']->id,
+            $ctx['project']->id,
+            'https://example.com/hub-overview',
+            ['description' => 'Overview mentioning ΑΣΕΠ 6Κ/2026 and other processes.'],
+        );
+
+        $plan = $this->planner->planForAnnouncement($ctx['organization']->id, $ctx['project']->id, $announcement);
+
+        $this->assertSame(ContentIntelligencePlan::STATUS_RESOLVED, $plan->status());
+        $this->assertSame('asep-2026', $plan->entityId());
+        $this->assertSame(ContentIntelligencePlan::MATCH_LOCATION_TITLE, $plan->matchLocation());
+        $this->assertTrue($plan->primaryBindingEligible());
+        $this->assertSame('hub', $plan->contentRole());
+    }
+
+    public function test_multiple_body_only_satellite_mentions_are_ambiguous(): void
+    {
+        $profile = $this->satelliteProfile();
+        $profile['entity_rules'][0]['match_scope'] = 'title_and_body';
+        $profile['entity_rules'][] = [
+            'entity_id' => 'asep-7k-2026',
+            'label' => 'ΑΣΕΠ 7Κ/2026',
+            'patterns' => ['7\\s*[ΚK]\\s*\\/\\s*2026'],
+            'match_scope' => 'title_and_body',
+            'content_role' => 'satellite',
+            'canonical_target_url' => 'https://example.test/asep-7k-2026',
+            'seo' => ['slug' => 'asep-7k-2026'],
+        ];
+        $ctx = $this->seedProfile($profile);
+        $announcement = $this->makeAnnouncement(
+            'ΑΣΕΠ 2026: Hub overview',
+            $ctx['organization']->id,
+            $ctx['project']->id,
+            'https://example.com/hub-multi-body',
+            ['description' => 'Mentions ΑΣΕΠ 6Κ/2026 and ΑΣΕΠ 7Κ/2026 in the body.'],
+        );
+
+        $plan = $this->planner->planForAnnouncement($ctx['organization']->id, $ctx['project']->id, $announcement);
+
+        $this->assertSame(ContentIntelligencePlan::STATUS_AMBIGUOUS, $plan->status());
+        $this->assertFalse($plan->primaryBindingEligible());
+    }
+
+    public function test_allow_body_primary_match_opt_in_restores_body_primary_eligibility(): void
+    {
+        $profile = $this->satelliteProfile();
+        $profile['entity_rules'][0]['match_scope'] = 'title_and_body';
+        $profile['entity_rules'][0]['allow_body_primary_match'] = true;
+        $ctx = $this->seedProfile($profile);
+        $announcement = $this->makeAnnouncement('Unrelated title', $ctx['organization']->id, $ctx['project']->id, 'https://example.com/x', [
+            'description' => 'Details for ΑΣΕΠ 6Κ/2026 applicants',
+        ]);
+
+        $plan = $this->planner->planForAnnouncement($ctx['organization']->id, $ctx['project']->id, $announcement);
+
+        $this->assertSame(ContentIntelligencePlan::STATUS_RESOLVED, $plan->status());
+        $this->assertSame(ContentIntelligencePlan::MATCH_LOCATION_BODY, $plan->matchLocation());
+        $this->assertTrue($plan->primaryBindingEligible());
+        $this->assertNotContains('body_only_match_reference_only', $plan->warnings());
     }
 
     public function test_project_a_config_never_resolves_project_b_announcement(): void
@@ -482,6 +577,37 @@ class ContentIntelligencePlannerTest extends TestCase
         }
 
         return false;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function hubAndSatelliteProfile(): array
+    {
+        $hubRule = [
+            'entity_id' => 'asep-2026',
+            'label' => 'ΑΣΕΠ 2026',
+            'patterns' => ['ΑΣΕΠ\\s+2026'],
+            'match_scope' => 'title',
+            'content_role' => 'hub',
+            'canonical_target_url' => 'https://example.test/asep-2026-hub',
+            'seo' => [
+                'search_intent' => 'ASEP 2026 hub overview',
+                'slug' => 'asep-2026',
+                'seo_title_template' => '{announcement_title}',
+                'h1_template' => '{announcement_title}',
+                'meta_description_template' => 'ASEP 2026 hub meta.',
+            ],
+        ];
+
+        $satelliteRule = $this->satelliteProfile()['entity_rules'][0];
+
+        return [
+            'version' => 1,
+            'publishing_mode' => 'plan_only',
+            'primary_domain' => 'studymentor.gr',
+            'entity_rules' => [$hubRule, $satelliteRule],
+        ];
     }
 
     /**
