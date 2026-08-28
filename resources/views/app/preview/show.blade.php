@@ -17,6 +17,8 @@
 <h2 id="preview-title" class="font-[family-name:var(--font-display)] text-2xl font-bold">{{ $preview->title() }}</h2>
 <div id="preview-body" class="prose max-w-none whitespace-pre-wrap text-sm leading-7">{{ $preview->body() }}</div>
 </article>
+<div class="space-y-4">
+@include('app.preview.delivery-panel', ['delivery' => $delivery, 'announcement' => $announcement])
 <aside class="cip-card space-y-2 text-sm">
 <div><strong>Preview ID:</strong> {{ $preview->previewId() }}</div>
 <div><strong>Result ID:</strong> {{ $preview->resultId() }}</div>
@@ -31,6 +33,7 @@
 <div><strong>Generated at:</strong> {{ $preview->createdAtUtc() }}</div>
 <div><strong>Duration:</strong> {{ $duration }} ms</div>
 </aside>
+</div>
 </div>
 <textarea id="markdown-source" class="hidden"># {{ $preview->title() }}
 

@@ -7,6 +7,7 @@ use App\Http\Controllers\Web\Auth\LoginController;
 use App\Http\Controllers\Web\Auth\ResetPasswordController;
 use App\Http\Controllers\Web\ContextController;
 use App\Http\Controllers\Web\DashboardController;
+use App\Http\Controllers\Web\DeliveryWebController;
 use App\Http\Controllers\Web\DiagnosticsWebController;
 use App\Http\Controllers\Web\EditorialWebController;
 use App\Http\Controllers\Web\PreviewWebController;
@@ -72,6 +73,7 @@ Route::middleware('auth')->group(function (): void {
         });
         Route::middleware(EnsureWebPermission::class.':sources.run')->group(function (): void {
             Route::post('/sources/{source}/run', [SourceWebController::class, 'run'])->name('sources.run');
+            Route::post('/sources/{source}/run-and-ingest', [SourceWebController::class, 'runAndIngest'])->name('sources.run-and-ingest');
             Route::post('/sources/{source}/check', [SourceWebController::class, 'check'])->name('sources.check');
         });
 
@@ -97,6 +99,9 @@ Route::middleware('auth')->group(function (): void {
         });
         Route::middleware(EnsureWebPermission::class.':editorial.generate')->group(function (): void {
             Route::post('/editorial/announcements/{announcement}/generate', [EditorialWebController::class, 'generate'])->name('editorial.generate');
+            Route::get('/preview/announcements/{announcement}/delivery/package', [DeliveryWebController::class, 'downloadPackage'])->name('delivery.package');
+            Route::post('/preview/announcements/{announcement}/delivery/wordpress-draft', [DeliveryWebController::class, 'createWordPressDraft'])->name('delivery.wordpress-draft');
+            Route::post('/preview/announcements/{announcement}/delivery/hub-release', [DeliveryWebController::class, 'releaseToHub'])->name('delivery.hub-release');
         });
         Route::middleware(EnsureWebPermission::class.':editorial.regenerate')->group(function (): void {
             Route::post('/editorial/announcements/{announcement}/regenerate', [EditorialWebController::class, 'regenerate'])->name('editorial.regenerate');

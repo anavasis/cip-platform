@@ -8,6 +8,7 @@ use App\Modules\Acquisition\Application\SourceRegistryService;
 use App\Modules\Acquisition\Domain\Sources\SourceRepositoryInterface;
 use App\Modules\Acquisition\Infrastructure\Jobs\AcquireSourceJob;
 use App\Modules\Acquisition\Infrastructure\Jobs\SourceConnectivityCheckJob;
+use App\Modules\Announcement\Application\EditorialIngestionService;
 use App\Modules\Acquisition\Infrastructure\Persistence\Models\AcquisitionRunItem;
 use App\Modules\Acquisition\Infrastructure\Persistence\Models\Source;
 use App\Modules\Announcement\Infrastructure\Persistence\Models\Announcement;
@@ -192,6 +193,36 @@ class SourceWebController extends Controller
         AcquireSourceJob::dispatch($platformJob->id);
 
         return back()->with('status', 'Acquisition run queued.');
+    }
+
+    public function runAndIngest(Source $source, EditorialIngestionService $ingestion): RedirectResponse
+    {
+        $this->assertTenant($source);
+        $org = OperatorContext::organization();
+        $project = OperatorContext::project();
+
+        $result = $ingestion
+            ->forTenant($org->id, $project->id)
+            ->ingestFromSource((string) $source->id);
+
+        if ($result->success() !== true) {
+            return back()->withErrors([
+                'ingest' => $result->errorCode() !== ''
+                    ? $result->errorCode()
+                    : 'ingestion_failed',
+            ]);
+        }
+
+        return back()->with(
+            'status',
+            sprintf(
+                'Run + Ingest complete: %d new, %d updated, %d unchanged, %d duplicate.',
+                $result->newCount(),
+                $result->updatedCount(),
+                $result->unchangedCount(),
+                $result->duplicateCount(),
+            ),
+        );
     }
 
     private function toggle(Source $source, bool $enabled): RedirectResponse

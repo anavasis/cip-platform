@@ -30,6 +30,7 @@
         @php $id = is_array($row) ? ($row['id'] ?? '') : $row->id; @endphp
         <a href="{{ route('app.sources.edit', $id) }}">Edit</a>
         <form class="inline" method="POST" action="{{ route('app.sources.run', $id) }}">@csrf<button class="underline">Run</button></form>
+        <form class="inline" method="POST" action="{{ route('app.sources.run-and-ingest', $id) }}">@csrf<button class="underline">Run + Ingest</button></form>
         <form class="inline" method="POST" action="{{ route('app.sources.check', $id) }}">@csrf<button class="underline">Test</button></form>
         <form class="inline" method="POST" action="{{ route((is_array($row) ? ($row['enabled'] ?? false) : $row->enabled) ? 'app.sources.disable' : 'app.sources.enable', $id) }}">@csrf<button class="underline">{{ (is_array($row) ? ($row['enabled'] ?? false) : $row->enabled) ? 'Disable' : 'Enable' }}</button></form>
         <form class="inline" method="POST" action="{{ route('app.sources.destroy', $id) }}" onsubmit="return confirm('Delete only unused sources. Prefer Disable if this source has history. Continue?')">@csrf @method('DELETE')<button class="underline text-red-700">Delete</button></form>
