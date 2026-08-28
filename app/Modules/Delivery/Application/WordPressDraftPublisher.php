@@ -20,6 +20,8 @@ final class WordPressDraftPublisher
 
     public const ERROR_ACTION_NOT_CREATE_NEW = 'wordpress_action_not_create_new';
 
+    public const ERROR_DRAFT_ALREADY_EXISTS = 'wordpress_draft_already_exists';
+
     private const SECRET_KEY = 'wordpress_app_password';
 
     public function __construct(
@@ -32,9 +34,7 @@ final class WordPressDraftPublisher
      */
     public function availability(string $organizationId, string $projectId): array
     {
-        $connection = $this->resolveConnection($organizationId, $projectId);
-
-        if ($connection === null) {
+        if (! $this->hasUsableConnectorConfig($organizationId, $projectId)) {
             return ['available' => false, 'reason' => self::ERROR_CONNECTOR_UNAVAILABLE];
         }
 
@@ -63,7 +63,16 @@ final class WordPressDraftPublisher
             ];
         }
 
-        $connection = $this->resolveConnection($organizationId, $projectId);
+        if ($this->hasUnconfirmedRemotePostId($organizationId, $projectId, $entity)) {
+            return [
+                'ok' => false,
+                'reason' => self::ERROR_DRAFT_ALREADY_EXISTS,
+                'remote_post_id' => null,
+                'draft_url' => null,
+            ];
+        }
+
+        $connection = $this->resolveConnection($organizationId, $projectId, $user);
         if ($connection === null) {
             return [
                 'ok' => false,
@@ -140,11 +149,41 @@ final class WordPressDraftPublisher
         ];
     }
 
+    private function hasUsableConnectorConfig(string $organizationId, string $projectId): bool
+    {
+        $connector = $this->findWordPressConnector($projectId);
+        if ($connector === null) {
+            return false;
+        }
+
+        $config = is_array($connector->config) ? $connector->config : [];
+        $siteUrl = trim((string) ($config['site_url'] ?? $config['wordpress_site_url'] ?? ''));
+        if ($siteUrl === '') {
+            return false;
+        }
+
+        $username = trim((string) ($config['username'] ?? ''));
+        if ($username === '') {
+            return false;
+        }
+
+        $secretKey = trim((string) ($config['secret_key'] ?? self::SECRET_KEY));
+        if ($secretKey === '') {
+            $secretKey = self::SECRET_KEY;
+        }
+
+        return $this->secrets->list($organizationId, $projectId)
+            ->contains(fn ($secret) => (string) $secret->key === $secretKey);
+    }
+
     /**
      * @return array{site_url: string, username: string, password: string}|null
      */
-    private function resolveConnection(string $organizationId, string $projectId): ?array
-    {
+    private function resolveConnection(
+        string $organizationId,
+        string $projectId,
+        ?User $user = null,
+    ): ?array {
         $connector = $this->findWordPressConnector($projectId);
         if ($connector === null) {
             return null;
@@ -157,6 +196,10 @@ final class WordPressDraftPublisher
         }
 
         $username = trim((string) ($config['username'] ?? ''));
+        if ($username === '') {
+            return null;
+        }
+
         $secretKey = trim((string) ($config['secret_key'] ?? self::SECRET_KEY));
         if ($secretKey === '') {
             $secretKey = self::SECRET_KEY;
@@ -170,7 +213,7 @@ final class WordPressDraftPublisher
         }
 
         try {
-            $revealed = $this->secrets->reveal($credentialSecret, null);
+            $revealed = $this->secrets->reveal($credentialSecret, $user);
         } catch (\Throwable) {
             return null;
         }
@@ -180,21 +223,27 @@ final class WordPressDraftPublisher
             return null;
         }
 
-        if ($username === '' && str_contains($password, ':')) {
-            [$username, $password] = explode(':', $password, 2);
-            $username = trim($username);
-            $password = trim($password);
-        }
-
-        if ($username === '' || $password === '') {
-            return null;
-        }
-
         return [
             'site_url' => $siteUrl,
             'username' => $username,
             'password' => $password,
         ];
+    }
+
+    private function hasUnconfirmedRemotePostId(
+        string $organizationId,
+        string $projectId,
+        ContentEntityModel $entity,
+    ): bool {
+        return RemotePostBindingModel::query()
+            ->where('organization_id', $organizationId)
+            ->where('project_id', $projectId)
+            ->where('content_entity_id', $entity->id)
+            ->where('remote_system', 'wordpress')
+            ->whereNull('confirmed_at')
+            ->whereNotNull('remote_post_id')
+            ->where('remote_post_id', '!=', '')
+            ->exists();
     }
 
     private function findWordPressConnector(string $projectId): ?ProjectConnector
