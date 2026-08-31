@@ -44,7 +44,7 @@ final class AsepDiavgeiaRelevanceFilter
     private function matchesRejectPattern(string $normalizedTitle): bool
     {
         $patterns = [
-            '/εντολ[άα]\s+πληρωμ/u',
+            '/[έε]νταλμ[άα]?\s+πληρωμ/u',
             '/απευθε[ίι]ας\s+αν[άα]θεσ/u',
             '/ορισμ[όo]ς\s+μελ[ώω]ν\s+επιτροπ/u',
             '/αποστολ[ήη]\s+απόφασης\s+επ[ίι]\s+αναπληρ[ώω]σ/u',

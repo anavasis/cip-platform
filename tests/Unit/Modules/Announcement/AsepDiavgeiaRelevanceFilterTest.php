@@ -78,4 +78,25 @@ class AsepDiavgeiaRelevanceFilterTest extends TestCase
         $this->assertTrue($this->filter->isRelevantTitle('  ΠΡΟΚΉΡΥΞΗ   3Κ/2026  '));
         $this->assertFalse($this->filter->isRelevantTitle('  ΕΝΤΑΛΜΑ   ΠΛΗΡΩΜΗΣ  '));
     }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function paymentOrderRejectProvider(): array
+    {
+        return [
+            'uppercase canonical' => ['ΕΝΤΑΛΜΑ ΠΛΗΡΩΜΗΣ'],
+            'accented lowercase' => ['Ένταλμα πληρωμής'],
+            'unaccented lowercase' => ['ενταλμα πληρωμης'],
+            'compound with embedded proclamation' => ['ΕΝΤΑΛΜΑ ΠΛΗΡΩΜΗΣ ΓΙΑ ΤΗΝ ΠΡΟΚΗΡΥΞΗ 3Κ/2026'],
+        ];
+    }
+
+    /**
+     * @dataProvider paymentOrderRejectProvider
+     */
+    public function test_rejects_payment_order_titles_via_explicit_reject_rule(string $title): void
+    {
+        $this->assertFalse($this->filter->isRelevantTitle($title));
+    }
 }
