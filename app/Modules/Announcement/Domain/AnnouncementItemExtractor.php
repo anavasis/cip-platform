@@ -58,10 +58,43 @@ final class AnnouncementItemExtractor
         }
 
         if ($this->hasRecognizedFeedStart($body)) {
-            return $this->extractFeed($body, $id);
+            $result = $this->extractFeed($body, $id);
+
+            if ($profile === 'asep_diavgeia_v1') {
+                return $this->filterDiavgeiaCandidates($result);
+            }
+
+            return $result;
         }
 
         return $this->failure('unrecognized_content');
+    }
+
+    /**
+     * @param  array{success: bool, error_code: string, candidates: array<int, AnnouncementCandidate>}  $result
+     * @return array{success: bool, error_code: string, candidates: array<int, AnnouncementCandidate>}
+     */
+    private function filterDiavgeiaCandidates(array $result): array
+    {
+        if (($result['success'] ?? false) !== true) {
+            return $result;
+        }
+
+        $filter = new AsepDiavgeiaRelevanceFilter();
+        $filtered = [];
+
+        foreach ($result['candidates'] as $candidate) {
+            if ($candidate instanceof AnnouncementCandidate
+                && $filter->isRelevantTitle($candidate->title())) {
+                $filtered[] = $candidate;
+            }
+        }
+
+        return [
+            'success' => true,
+            'error_code' => '',
+            'candidates' => $filtered,
+        ];
     }
 
     /**

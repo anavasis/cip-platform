@@ -323,4 +323,69 @@ class AnnouncementItemExtractorTest extends TestCase
         $this->assertSame('ASEP Item', $result['candidates'][0]->title());
         $this->assertSame('https://example.com/asep', $result['candidates'][0]->canonicalUrl());
     }
+
+    public function test_asep_diavgeia_profile_filters_mixed_rss_to_relevant_candidates_only(): void
+    {
+        $result = $this->extractor->extract(
+            $this->mixedDiavgeiaRssFeed(),
+            self::SOURCE_ID,
+            'rss',
+            'asep_diavgeia_v1',
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('', $result['error_code']);
+        $this->assertCount(2, $result['candidates']);
+
+        $titles = array_map(
+            static fn ($candidate) => $candidate->title(),
+            $result['candidates'],
+        );
+
+        $this->assertSame(
+            ['Προκήρυξη 3Κ/2026', 'Προσωρινά αποτελέσματα 6Κ/2026'],
+            $titles,
+        );
+    }
+
+    public function test_rss_v1_profile_keeps_all_valid_items_from_same_mixed_feed(): void
+    {
+        $result = $this->extractor->extract(
+            $this->mixedDiavgeiaRssFeed(),
+            self::SOURCE_ID,
+            'rss',
+            'rss_v1',
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('', $result['error_code']);
+        $this->assertCount(4, $result['candidates']);
+    }
+
+    public function test_asep_diavgeia_profile_returns_success_with_zero_candidates_when_all_irrelevant(): void
+    {
+        $result = $this->extractor->extract(
+            '<?xml version="1.0"?><rss version="2.0"><channel>'.
+            '<item><title>ΕΝΤΑΛΜΑ ΠΛΗΡΩΜΗΣ</title><link>https://diavgeia.gov.gr/decision/1</link></item>'.
+            '<item><title>Τροποποίηση οργανογράμματος</title><link>https://diavgeia.gov.gr/decision/2</link></item>'.
+            '</channel></rss>',
+            self::SOURCE_ID,
+            'rss',
+            'asep_diavgeia_v1',
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('', $result['error_code']);
+        $this->assertSame([], $result['candidates']);
+    }
+
+    private function mixedDiavgeiaRssFeed(): string
+    {
+        return '<?xml version="1.0"?><rss version="2.0"><channel>'.
+            '<item><title>Προκήρυξη 3Κ/2026</title><link>https://diavgeia.gov.gr/decision/101</link></item>'.
+            '<item><title>ΕΝΤΑΛΜΑ ΠΛΗΡΩΜΗΣ</title><link>https://diavgeia.gov.gr/decision/102</link></item>'.
+            '<item><title>Προσωρινά αποτελέσματα 6Κ/2026</title><link>https://diavgeia.gov.gr/decision/103</link></item>'.
+            '<item><title>Τροποποίηση οργανογράμματος</title><link>https://diavgeia.gov.gr/decision/104</link></item>'.
+            '</channel></rss>';
+    }
 }
