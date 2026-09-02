@@ -364,7 +364,35 @@ final class AnnouncementItemExtractor
             $trimmed = ltrim(substr($trimmed, 3));
         }
 
-        return preg_match('/^(<\?xml[^>]*>\s*)?<(rss|feed)\b/i', $trimmed) === 1;
+        while (true) {
+            $trimmed = ltrim($trimmed);
+
+            if ($trimmed === '') {
+                return false;
+            }
+
+            if (preg_match('/^<\?xml[^>]*>/i', $trimmed, $matches) === 1) {
+                $trimmed = substr($trimmed, strlen($matches[0]));
+
+                continue;
+            }
+
+            if (str_starts_with($trimmed, '<!--')) {
+                $close = strpos($trimmed, '-->');
+
+                if ($close === false) {
+                    return false;
+                }
+
+                $trimmed = substr($trimmed, $close + 3);
+
+                continue;
+            }
+
+            break;
+        }
+
+        return preg_match('/^<(rss|feed)\b/i', $trimmed) === 1;
     }
 
     /**

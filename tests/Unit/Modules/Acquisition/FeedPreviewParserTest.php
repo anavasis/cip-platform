@@ -219,4 +219,134 @@ class FeedPreviewParserTest extends TestCase
         $this->assertStringNotContainsString("stripos(\$body, '<!DOCTYPE')", $source);
         $this->assertStringNotContainsString("stripos(\$body, '<!ENTITY')", $source);
     }
+
+    public function test_accepts_joomla_rss_with_xml_declaration_and_prolog_comment(): void
+    {
+        $result = $this->parser->parse(
+            '<?xml version="1.0" encoding="utf-8"?>'."\n".
+            '<!-- generator="Joomla! - Open Source Content Management" -->'."\n".
+            '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">'."\n".
+            '    <channel>'."\n".
+            '<item><title>MinEdu ASEP</title><link>https://www.minedu.gov.gr/item/1</link></item>'.
+            '</channel></rss>',
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('', $result['error_code']);
+        $this->assertSame('rss', $result['format']);
+        $this->assertSame(1, $result['item_count']);
+        $this->assertSame('MinEdu ASEP', $result['preview_items'][0]['title']);
+    }
+
+    public function test_accepts_joomla_15_rss_with_xml_declaration_and_prolog_comment(): void
+    {
+        $result = $this->parser->parse(
+            '<?xml version="1.0" encoding="utf-8"?>'."\n".
+            '<!-- generator="Joomla! 1.5 - Open Source Content Management" -->'."\n".
+            '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">'."\n".
+            '    <channel>'."\n".
+            '<item><title>DAA Item</title><link>https://www.daa.gov.gr/item/1</link></item>'.
+            '</channel></rss>',
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('', $result['error_code']);
+        $this->assertSame('rss', $result['format']);
+        $this->assertSame(1, $result['item_count']);
+    }
+
+    public function test_accepts_rss_with_prolog_comment_without_xml_declaration(): void
+    {
+        $result = $this->parser->parse(
+            '<!-- standalone comment -->'."\n".
+            '<rss version="2.0"><channel>'.
+            '<item><title>Comment Only</title><link>https://example.com/1</link></item>'.
+            '</channel></rss>',
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('rss', $result['format']);
+        $this->assertSame(1, $result['item_count']);
+    }
+
+    public function test_accepts_multiple_prolog_comments_before_rss(): void
+    {
+        $result = $this->parser->parse(
+            '<?xml version="1.0"?>'."\n".
+            '<!-- first -->'."\n".
+            '<!-- second -->'."\n".
+            '<rss version="2.0"><channel>'.
+            '<item><title>Multi Comment</title><link>https://example.com/multi</link></item>'.
+            '</channel></rss>',
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('rss', $result['format']);
+        $this->assertSame(1, $result['item_count']);
+    }
+
+    public function test_accepts_atom_with_prolog_comment(): void
+    {
+        $result = $this->parser->parse(
+            '<?xml version="1.0"?>'."\n".
+            '<!-- atom comment -->'."\n".
+            '<feed xmlns="http://www.w3.org/2005/Atom">'.
+            '<entry><title>Atom Comment</title><link href="https://example.com/atom"/>'.
+            '<updated>2024-01-01T00:00:00Z</updated></entry></feed>',
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('atom', $result['format']);
+        $this->assertSame(1, $result['item_count']);
+    }
+
+    public function test_accepts_utf8_bom_with_declaration_comment_and_rss(): void
+    {
+        $result = $this->parser->parse(
+            "\xEF\xBB\xBF".'<?xml version="1.0"?>'."\n".
+            '<!-- bom comment -->'."\n".
+            '<rss version="2.0"><channel>'.
+            '<item><title>BOM Comment</title><link>https://example.com/bom</link></item>'.
+            '</channel></rss>',
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('rss', $result['format']);
+        $this->assertSame(1, $result['item_count']);
+    }
+
+    public function test_rejects_unclosed_prolog_comment(): void
+    {
+        $result = $this->parser->parse(
+            '<?xml version="1.0"?>'."\n".
+            '<!-- unclosed comment'."\n".
+            '<rss version="2.0"><channel/></rss>',
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('unrecognized_feed', $result['error_code']);
+    }
+
+    public function test_rejects_arbitrary_text_before_rss(): void
+    {
+        $result = $this->parser->parse(
+            'not xml preamble'."\n".
+            '<rss version="2.0"><channel/></rss>',
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('unrecognized_feed', $result['error_code']);
+    }
+
+    public function test_rejects_malformed_xml_after_valid_prolog(): void
+    {
+        $result = $this->parser->parse(
+            '<?xml version="1.0"?>'."\n".
+            '<!-- ok -->'."\n".
+            '<rss version="2.0"><channel><item><title>broken</title></channel></rss>',
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('xml_parse_failed', $result['error_code']);
+    }
 }
