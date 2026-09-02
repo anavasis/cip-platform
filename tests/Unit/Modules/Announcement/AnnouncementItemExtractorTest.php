@@ -379,6 +379,96 @@ class AnnouncementItemExtractorTest extends TestCase
         $this->assertSame([], $result['candidates']);
     }
 
+    public function test_extracts_joomla_rss_with_prolog_comment(): void
+    {
+        $result = $this->extractor->extract(
+            '<?xml version="1.0" encoding="utf-8"?>'."\n".
+            '<!-- generator="Joomla! - Open Source Content Management" -->'."\n".
+            '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">'."\n".
+            '    <channel>'."\n".
+            '<item><title>MinEdu ASEP</title><link>https://www.minedu.gov.gr/item/1</link></item>'.
+            '</channel></rss>',
+            self::SOURCE_ID,
+            'rss',
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('', $result['error_code']);
+        $this->assertCount(1, $result['candidates']);
+        $this->assertSame('MinEdu ASEP', $result['candidates'][0]->title());
+    }
+
+    public function test_extracts_joomla_15_rss_with_prolog_comment(): void
+    {
+        $result = $this->extractor->extract(
+            '<?xml version="1.0" encoding="utf-8"?>'."\n".
+            '<!-- generator="Joomla! 1.5 - Open Source Content Management" -->'."\n".
+            '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">'."\n".
+            '    <channel>'."\n".
+            '<item><title>DAA Item</title><link>https://www.daa.gov.gr/item/1</link></item>'.
+            '</channel></rss>',
+            self::SOURCE_ID,
+            'rss',
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('', $result['error_code']);
+        $this->assertCount(1, $result['candidates']);
+        $this->assertSame('DAA Item', $result['candidates'][0]->title());
+    }
+
+    public function test_extracts_bom_declaration_comment_rss(): void
+    {
+        $result = $this->extractor->extract(
+            "\xEF\xBB\xBF".'<?xml version="1.0"?>'."\n".
+            '<!-- bom comment -->'."\n".
+            '<rss version="2.0"><channel>'.
+            '<item><title>BOM Comment</title><link>https://example.com/bom-comment</link></item>'.
+            '</channel></rss>',
+            self::SOURCE_ID,
+            'rss',
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('', $result['error_code']);
+        $this->assertCount(1, $result['candidates']);
+        $this->assertSame('BOM Comment', $result['candidates'][0]->title());
+    }
+
+    public function test_extracts_atom_with_prolog_comment(): void
+    {
+        $result = $this->extractor->extract(
+            '<?xml version="1.0"?>'."\n".
+            '<!-- atom comment -->'."\n".
+            '<feed xmlns="http://www.w3.org/2005/Atom">'.
+            '<entry><title>Atom Comment</title><link href="https://example.com/atom-comment"/>'.
+            '<id>atom-comment</id><updated>2024-01-01T00:00:00Z</updated></entry></feed>',
+            self::SOURCE_ID,
+            'atom',
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('', $result['error_code']);
+        $this->assertCount(1, $result['candidates']);
+        $this->assertSame('Atom Comment', $result['candidates'][0]->title());
+    }
+
+    public function test_rejects_unclosed_prolog_comment(): void
+    {
+        $result = $this->extractor->extract(
+            '<?xml version="1.0"?>'."\n".
+            '<!-- unclosed'."\n".
+            '<rss version="2.0"><channel>'.
+            '<item><title>Broken</title><link>https://example.com/broken</link></item>'.
+            '</channel></rss>',
+            self::SOURCE_ID,
+            'rss',
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('unrecognized_content', $result['error_code']);
+    }
+
     private function mixedDiavgeiaRssFeed(): string
     {
         return '<?xml version="1.0"?><rss version="2.0"><channel>'.
