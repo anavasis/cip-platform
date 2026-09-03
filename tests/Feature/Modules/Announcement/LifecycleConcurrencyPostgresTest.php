@@ -200,6 +200,57 @@ class LifecycleConcurrencyPostgresTest extends TestCase
         $owner->delete();
     }
 
+    public function test_long_source_guid_on_content_update_persists_with_null_column(): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('Long source_guid update-path compatibility requires PostgreSQL.');
+        }
+
+        ['user' => $owner, 'organization' => $organization] = $this->createUserWithOrg();
+        $project = Project::create([
+            'organization_id' => $organization->id,
+            'name' => 'PostgreSQL Long GUID Update',
+            'slug' => 'postgres-long-guid-update-'.uniqid(),
+            'created_by' => $owner->id,
+        ]);
+        $source = $this->createSource($organization->id, $project->id, 'postgres-long-guid-update');
+        $shortCanonical = 'https://www.minedu.gov.gr/?view=article&id=54731:update-path&catid=2017';
+        $longGuid = $this->mineduStyleLongGuid();
+        $this->assertGreaterThan(255, mb_strlen($longGuid, 'UTF-8'));
+
+        $lifecycle = app(AnnouncementLifecycleService::class)
+            ->forTenant($organization->id, $project->id);
+        $created = $lifecycle->apply([
+            $this->candidate($source->id, 'Initial MinEdu title', $shortCanonical, $shortCanonical),
+        ]);
+
+        $this->assertTrue($created->success());
+        $this->assertSame(LifecycleOutcome::NEW_ITEM, $created->decisions()[0]->outcome());
+
+        $updated = $lifecycle->apply([
+            $this->candidate($source->id, 'Updated MinEdu title', $shortCanonical, $longGuid),
+        ]);
+
+        $this->assertTrue($updated->success());
+        $this->assertSame(1, $updated->updatedCount());
+        $this->assertSame(LifecycleOutcome::UPDATED, $updated->decisions()[0]->outcome());
+        $this->assertSame(2, $updated->decisions()[0]->revisionNo());
+
+        $announcement = Announcement::query()
+            ->where('project_id', $project->id)
+            ->where('source_id', $source->id)
+            ->sole();
+
+        $this->assertNull($announcement->source_guid);
+        $this->assertSame($shortCanonical, $announcement->canonical_url);
+        $this->assertSame($longGuid, $announcement->raw_payload['guid'] ?? null);
+        $this->assertSame('Updated MinEdu title', $announcement->raw_title);
+        $this->assertSame(2, $announcement->revision_no);
+
+        $organization->delete();
+        $owner->delete();
+    }
+
     public function test_real_database_error_propagates_without_aborted_transaction_mask(): void
     {
         if (DB::connection()->getDriverName() !== 'pgsql') {

@@ -289,9 +289,13 @@ final class EloquentAnnouncementRepository implements AnnouncementRepositoryInte
         $updates = [];
 
         foreach (self::CONTENT_COLUMNS as $column) {
-            if (array_key_exists($column, $data)) {
-                $updates[$column] = $data[$column];
+            if (! array_key_exists($column, $data)) {
+                continue;
             }
+
+            $updates[$column] = $column === 'source_guid'
+                ? $this->normalizeSourceGuidForColumn($data[$column])
+                : $data[$column];
         }
 
         if (array_key_exists('raw_payload', $updates)) {
