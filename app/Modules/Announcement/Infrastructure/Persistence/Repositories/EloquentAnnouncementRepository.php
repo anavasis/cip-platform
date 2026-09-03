@@ -20,6 +20,8 @@ final class EloquentAnnouncementRepository implements AnnouncementRepositoryInte
         'last_seen_at',
     ];
 
+    private const MAX_SOURCE_GUID_CHARS = 255;
+
     private string $lastInsertId = '';
 
     public function insert(array $data): bool
@@ -32,54 +34,50 @@ final class EloquentAnnouncementRepository implements AnnouncementRepositoryInte
             return false;
         }
 
-        try {
-            $announcement = new Announcement;
-            $announcement->fill([
-                'organization_id' => $data['organization_id'],
-                'project_id' => $data['project_id'],
-                'source_id' => $data['source_id'],
-                'identity_hash' => $data['identity_hash'] ?? null,
-                'identity_basis' => $data['identity_basis'] ?? null,
-                'source_guid' => $data['source_guid'] ?? null,
-                'canonical_url' => $data['canonical_url'] ?? null,
-                'source_published_at' => $data['source_published_at']
-                    ?? $data['source_published_at_utc']
-                    ?? null,
-                'raw_title' => $data['raw_title'] ?? null,
-                'content_hash' => $data['content_hash'] ?? null,
-                'raw_payload' => $this->normalizeJsonArray($data['raw_payload'] ?? []),
-                'revision_no' => $data['revision_no'] ?? 1,
-                'first_seen_at' => $data['first_seen_at']
-                    ?? $data['first_seen_at_utc']
-                    ?? null,
-                'last_seen_at' => $data['last_seen_at']
-                    ?? $data['last_seen_at_utc']
-                    ?? null,
-            ]);
+        $announcement = new Announcement;
+        $announcement->fill([
+            'organization_id' => $data['organization_id'],
+            'project_id' => $data['project_id'],
+            'source_id' => $data['source_id'],
+            'identity_hash' => $data['identity_hash'] ?? null,
+            'identity_basis' => $data['identity_basis'] ?? null,
+            'source_guid' => $this->normalizeSourceGuidForColumn($data['source_guid'] ?? null),
+            'canonical_url' => $data['canonical_url'] ?? null,
+            'source_published_at' => $data['source_published_at']
+                ?? $data['source_published_at_utc']
+                ?? null,
+            'raw_title' => $data['raw_title'] ?? null,
+            'content_hash' => $data['content_hash'] ?? null,
+            'raw_payload' => $this->normalizeJsonArray($data['raw_payload'] ?? []),
+            'revision_no' => $data['revision_no'] ?? 1,
+            'first_seen_at' => $data['first_seen_at']
+                ?? $data['first_seen_at_utc']
+                ?? null,
+            'last_seen_at' => $data['last_seen_at']
+                ?? $data['last_seen_at_utc']
+                ?? null,
+        ]);
 
-            if (array_key_exists('created_at_utc', $data)) {
-                $announcement->created_at = $data['created_at_utc'];
-            }
+        if (array_key_exists('created_at_utc', $data)) {
+            $announcement->created_at = $data['created_at_utc'];
+        }
 
-            if (array_key_exists('updated_at_utc', $data)) {
-                $announcement->updated_at = $data['updated_at_utc'];
-            }
+        if (array_key_exists('updated_at_utc', $data)) {
+            $announcement->updated_at = $data['updated_at_utc'];
+        }
 
-            $announcement->id = (string) Str::uuid();
-            $announcement->created_at ??= now();
-            $announcement->updated_at ??= now();
-            $inserted = Announcement::query()->insertOrIgnore($announcement->getAttributes());
+        $announcement->id = (string) Str::uuid();
+        $announcement->created_at ??= now();
+        $announcement->updated_at ??= now();
+        $inserted = Announcement::query()->insertOrIgnore($announcement->getAttributes());
 
-            if ($inserted !== 1) {
-                return false;
-            }
-
-            $this->lastInsertId = (string) $announcement->getKey();
-
-            return true;
-        } catch (Throwable) {
+        if ($inserted !== 1) {
             return false;
         }
+
+        $this->lastInsertId = (string) $announcement->getKey();
+
+        return true;
     }
 
     public function findBySourceAndIdentityHash(
@@ -291,9 +289,13 @@ final class EloquentAnnouncementRepository implements AnnouncementRepositoryInte
         $updates = [];
 
         foreach (self::CONTENT_COLUMNS as $column) {
-            if (array_key_exists($column, $data)) {
-                $updates[$column] = $data[$column];
+            if (! array_key_exists($column, $data)) {
+                continue;
             }
+
+            $updates[$column] = $column === 'source_guid'
+                ? $this->normalizeSourceGuidForColumn($data[$column])
+                : $data[$column];
         }
 
         if (array_key_exists('raw_payload', $updates)) {
@@ -301,6 +303,29 @@ final class EloquentAnnouncementRepository implements AnnouncementRepositoryInte
         }
 
         return $updates;
+    }
+
+    private function normalizeSourceGuidForColumn(mixed $sourceGuid): ?string
+    {
+        if ($sourceGuid === null) {
+            return null;
+        }
+
+        $trimmed = trim((string) $sourceGuid);
+
+        if ($trimmed === '') {
+            return null;
+        }
+
+        if (function_exists('mb_strlen')) {
+            if (mb_strlen($trimmed, 'UTF-8') > self::MAX_SOURCE_GUID_CHARS) {
+                return null;
+            }
+        } elseif (strlen($trimmed) > self::MAX_SOURCE_GUID_CHARS) {
+            return null;
+        }
+
+        return $trimmed;
     }
 
     /** @return array<int|string, mixed> */
